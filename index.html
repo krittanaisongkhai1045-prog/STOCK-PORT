@@ -1229,91 +1229,103 @@ async function runScan(){
   const criteria=[];
   if(document.getElementById('c-pe')?.checked)   criteria.push('P/E ต่ำ / valuation ถูก');
   if(document.getElementById('c-52w')?.checked)  criteria.push('อยู่ใกล้ 52-week low');
-  if(document.getElementById('c-ma')?.checked)   criteria.push('ราคาต่ำกว่า MA (dip)');
+  if(document.getElementById('c-ma')?.checked)   criteria.push('ราคาต่ำกว่า MA200 (dip)');
   if(document.getElementById('c-div')?.checked)  criteria.push('dividend yield สูง');
   if(document.getElementById('c-fund')?.checked) criteria.push('พื้นฐานธุรกิจดี รายได้และกำไรเติบโต');
   if(document.getElementById('c-news')?.checked) criteria.push('ไม่มีข่าวร้ายหรือความเสี่ยงสำคัญล่าสุด');
 
-  // Get live prices context
+  // Context จากพอร์ต
   const liveCtx=syms.map(s=>{
     const p=LIVE[s];
     const inv=DB.investments.find(i=>i.sym===s);
-    return p ? `${s}: ราคา ${fU(p.price)} (${fP(p.chg||0)})${inv?`, ถือ ${fN(inv.qty)} หุ้น, ซื้อที่ ${fU(inv.buyPrice)}`:''}` : s;
+    return p
+      ? `${s}: ราคา $${p.price?.toFixed(2)} (${(p.chg||0)>=0?'+':''}${(p.chg||0).toFixed(2)}%)${inv?`, ถือ ${inv.qty} หุ้น, ซื้อที่ $${inv.buyPrice}`:''}`
+      : s;
   }).join('\n');
 
-  btn.disabled=true;
-  btn.innerHTML='<span class="spin"></span> AI กำลังวิเคราะห์...';
-  out.innerHTML=`<div style="background:var(--bg1);border:1px solid var(--border);border-radius:var(--rad);padding:16px;text-align:center;color:var(--muted);font-size:12px">⏳ วิเคราะห์ ${syms.length} ตัว กรุณารอสักครู่...</div>`;
-
+  // สร้าง prompt สำเร็จรูป
   const prompt=`คุณคือผู้เชี่ยวชาญการลงทุนหุ้นสหรัฐ วิเคราะห์หุ้นต่อไปนี้และให้คะแนน "ความน่าซื้อ" 0-100%
 
 หุ้นที่ต้องวิเคราะห์:
 ${liveCtx}
 
-เกณฑ์การให้คะแนน (แต่ละข้อมีน้ำหนักเท่าๆ กัน):
+เกณฑ์การให้คะแนน (แต่ละข้อมีน้ำหนักเท่าๆ กัน รวม 100%):
 ${criteria.map((c,i)=>`${i+1}. ${c}`).join('\n')}
 
-ถ้าครบทุกเกณฑ์ = 100% ถ้าขาดเกณฑ์ใดหักคะแนนตามสัดส่วน
+ถ้าครบทุกเกณฑ์ = 100% | ขาดเกณฑ์ใดหักคะแนนตามสัดส่วน
+ใช้ข้อมูล web search เพื่อดึงข้อมูลปัจจุบันจริงๆ
 
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น รูปแบบ:
-[{"sym":"NVDA","score":85,"verdict":"น่าซื้อ","reasons":["เหตุผล1","เหตุผล2"],"risks":["ความเสี่ยง1"],"action":"ซื้อเพิ่ม / ถือ / รอจังหวะ"}]`;
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่นนอก JSON รูปแบบ:
+[{"sym":"AAPL","score":72,"verdict":"รอดูก่อน","reasons":["จุดดี1","จุดดี2"],"risks":["ความเสี่ยง1"],"action":"ถือ / รอจังหวะ Dip"}]`;
 
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:1000,
-        messages:[{role:'user',content:prompt}]
-      })
-    });
-    const data=await res.json();
-    let raw=data.content?.[0]?.text||'[]';
-    raw=raw.replace(/```json|```/g,'').trim();
-    const results=JSON.parse(raw);
+  // แสดง UI พร้อมปุ่ม copy + เปิด Claude
+  out.innerHTML=`
+  <div class="card" style="border-color:rgba(75,150,255,.25)">
+    <div class="ch" style="background:rgba(75,150,255,.06)">
+      <span class="ct" style="color:var(--b)">📋 Prompt พร้อมแล้ว — วาง Claude.ai</span>
+    </div>
+    <div style="padding:12px 14px">
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:10px;line-height:1.7">
+        เนื่องจาก PWA ไม่สามารถเรียก AI โดยตรงได้ ให้ทำตามขั้นตอนนี้ครับ:
+      </p>
 
-    out.innerHTML=`
-    <div style="font-weight:700;font-size:13px;margin-bottom:8px">📊 ผลการสแกน ${results.length} ตัว</div>
-    ${results.sort((a,b)=>b.score-a.score).map(r=>{
-      const col=r.score>=75?'var(--g)':r.score>=50?'var(--y)':'var(--r)';
-      const verdict=r.score>=75?'🟢 น่าซื้อ':r.score>=50?'🟡 รอดูก่อน':'🔴 ยังไม่น่าซื้อ';
-      return`<div class="card" style="border-color:${col}33;margin-bottom:9px">
-        <div class="ch" style="border-color:${col}22">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="mono" style="font-weight:800;font-size:16px;color:${col}">${r.sym}</span>
-            <span class="tag" style="background:${col}20;color:${col};border-color:${col}40">${verdict}</span>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:${col}">${r.score}%</div>
-            <div style="font-size:10px;color:var(--muted)">ความน่าซื้อ</div>
-          </div>
+      <!-- Steps -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--b);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+          <div style="font-size:12px;padding-top:3px">กด <b style="color:var(--g)">"Copy Prompt"</b> ด้านล่าง</div>
         </div>
-        <div style="padding:10px 14px">
-          <!-- score bar -->
-          <div class="pbar-w" style="height:7px;margin-bottom:10px">
-            <div class="pbar" style="width:${r.score}%;background:${col}"></div>
-          </div>
-          <!-- action -->
-          <div style="background:${col}15;border-radius:8px;padding:8px 11px;margin-bottom:9px;font-size:12px;font-weight:600;color:${col}">
-            📌 ${r.action||'—'}
-          </div>
-          <!-- reasons -->
-          ${r.reasons?.length?`<div style="font-size:10px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">✅ จุดดี</div>
-          ${r.reasons.map(x=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text)">• ${x}</div>`).join('')}`:''}
-          <!-- risks -->
-          ${r.risks?.length?`<div style="font-size:10px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px">⚠️ ความเสี่ยง</div>
-          ${r.risks.map(x=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--r)">• ${x}</div>`).join('')}`:''}
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--b);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+          <div style="font-size:12px;padding-top:3px">กด <b style="color:var(--y)">"เปิด Claude.ai"</b> → วาง Prompt → กด Send</div>
         </div>
-      </div>`;
-    }).join('')}
-    <div style="font-size:10px;color:var(--muted);text-align:center;padding:8px 0">⚠️ ผลการวิเคราะห์นี้เป็นเพียงข้อมูลประกอบการตัดสินใจ ไม่ใช่คำแนะนำการลงทุน</div>`;
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--b);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+          <div style="font-size:12px;padding-top:3px">Claude จะวิเคราะห์ <b style="color:var(--g)">${syms.length} ตัว</b> พร้อมคะแนนและคำแนะนำ</div>
+        </div>
+      </div>
 
-  }catch(e){
-    out.innerHTML=`<div style="background:var(--ra);border:1px solid rgba(255,79,106,.3);border-radius:var(--rad);padding:14px;font-size:12px;color:var(--r)">❌ วิเคราะห์ไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง</div>`;
-  }
-  btn.disabled=false;
-  btn.innerHTML='🔍 วิเคราะห์ด้วย AI';
+      <!-- Preview prompt -->
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:10px;color:var(--muted2);line-height:1.7;max-height:100px;overflow:hidden;margin-bottom:10px;white-space:pre-wrap;font-family:'JetBrains Mono',monospace" id="prompt-preview">${prompt.slice(0,180)}...</div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g btn-full" onclick="copyPrompt()" id="copy-btn">
+          📋 Copy Prompt
+        </button>
+        <button class="btn btn-b btn-full" onclick="window.open('https://claude.ai','_blank')">
+          🤖 เปิด Claude.ai
+        </button>
+      </div>
+      <div id="copy-ok" style="text-align:center;font-size:11px;color:var(--g);margin-top:7px;display:none">✅ Copy แล้ว! เปิด Claude.ai แล้ววาง Prompt ได้เลย</div>
+    </div>
+  </div>`;
+
+  // เก็บ prompt ไว้ใน closure
+  window._scanPrompt = prompt;
+}
+
+function copyPrompt(){
+  if(!window._scanPrompt) return;
+  navigator.clipboard.writeText(window._scanPrompt).then(()=>{
+    document.getElementById('copy-ok').style.display='block';
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='✅ Copied!';
+    btn.style.background='var(--bg3)';
+    setTimeout(()=>{
+      btn.innerHTML='📋 Copy Prompt';
+      btn.style.background='';
+    }, 3000);
+  }).catch(()=>{
+    // fallback สำหรับ iOS
+    const ta=document.createElement('textarea');
+    ta.value=window._scanPrompt;
+    ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');document.body.removeChild(ta);
+    document.getElementById('copy-ok').style.display='block';
+    toast('Copy แล้วครับ!');
+  });
 }
 
 /* ══ MODAL HELPERS ═══════════════════════════════════════════════════ */
