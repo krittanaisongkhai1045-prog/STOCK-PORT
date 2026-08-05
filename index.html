@@ -494,126 +494,92 @@ function destroyChart(key){if(charts[key]){charts[key].destroy();charts[key]=nul
    4. Yahoo Finance v7 via thingproxy
    ถ้าทุก proxy ล้มเหลว ใช้ราคาเดิมที่บันทึกไว้
 ════════════════════════════════════════════════════════════════════ */
-const YF_FIELDS = 'regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,shortName';
+/* ══ FINNHUB PRICE ENGINE ════════════════════════════════════════════
+   Finnhub API — ฟรี 60 req/นาที, ไม่มีปัญหา CORS, ใช้ได้ตรงจาก browser
+   API Key: d9pdii9r01qo4gjcvba0d9pdii9r01qo4gjcvbag
+   Docs: https://finnhub.io/docs/api/quote
+════════════════════════════════════════════════════════════════════ */
+const FINNHUB_KEY = 'd9pdii9r01qo4gjcvba0d9pdii9r01qo4gjcvbag';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
-function makeYahooUrl(syms, ver='v8'){
-  const base = ver==='v8'
-    ? `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${syms}&fields=${YF_FIELDS}`
-    : `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&fields=${YF_FIELDS}`;
-  return base;
+// แปลง Symbol พิเศษสำหรับ Finnhub
+function toFinnhubSym(sym){
+  // Forex pairs — ใช้ FX endpoint แยก
+  if(sym==='USDTHB=X') return null; // จัดการแยก
+  // BRK.B → BRK.B (Finnhub ใช้ . ได้)
+  return sym;
 }
 
-const PROXIES = [
-  // proxy 1: corsproxy.io — ดีที่สุด
-  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  // proxy 2: allorigins raw
-  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  // proxy 3: thingproxy
-  (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
-  // proxy 4: corsproxy.io กับ v7
-  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url.replace('/v8/','/v7/'))}`,
-];
-
-async function tryFetchYahoo(syms){
-  const yahooUrl = makeYahooUrl(syms, 'v8');
-  const yahooUrlV7 = makeYahooUrl(syms, 'v7');
-
-  for(let i=0; i<PROXIES.length; i++){
-    const targetUrl = i===3 ? yahooUrlV7 : yahooUrl;
-    const proxyUrl = PROXIES[i](targetUrl);
-    try{
-      const res = await fetch(proxyUrl, {signal: AbortSignal.timeout(8000)});
-      if(!res.ok) continue;
-      const json = await res.json();
-      const results = json?.quoteResponse?.result || json?.chart?.result;
-      if(results && results.length > 0){
-        console.log(`✅ Price proxy ${i+1} สำเร็จ`);
-        return results;
-      }
-    }catch(e){
-      console.log(`❌ Price proxy ${i+1} ล้มเหลว:`, e.message);
+// ดึงอัตราแลกเปลี่ยน USD/THB จาก exchangerate-api (ฟรี ไม่ต้อง key)
+async function fetchUsdThb(){
+  try{
+    const res=await fetch('https://open.er-api.com/v6/latest/USD',{signal:AbortSignal.timeout(6000)});
+    const json=await res.json();
+    if(json?.rates?.THB){
+      DB.usdthb=json.rates.THB;
+      return json.rates.THB;
     }
+  }catch(e){
+    console.log('USD/THB fetch failed, using saved rate');
   }
-  return null;
+  return DB.usdthb||35;
+}
+
+// ดึงราคาหุ้นตัวเดียวจาก Finnhub
+async function finnhubQuote(sym){
+  const url=`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${FINNHUB_KEY}`;
+  const res=await fetch(url,{signal:AbortSignal.timeout(6000)});
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const q=await res.json();
+  // q.c = current price, q.dp = % change, q.pc = previous close
+  if(!q.c||q.c===0) throw new Error('No price data');
+  return{price:q.c, chg:q.dp||0, prev:q.pc||q.c};
 }
 
 async function fetchPrices(){
-  const syms=[...new Set([...DB.investments.map(i=>i.sym),'USDTHB=X'])].filter(Boolean);
-  if(!syms.length){setS(false,'ยังไม่มีสินทรัพย์');return;}
+  const stockSyms=[...new Set(DB.investments.map(i=>i.sym))].filter(Boolean);
+  if(!stockSyms.length){setS(false,'ยังไม่มีสินทรัพย์');return;}
+
   setS(true,'กำลังดึงราคาสด...');
 
-  // แบ่งเป็น batch ละ 10 ตัว เพื่อป้องกัน URL ยาวเกิน
-  const batches = [];
-  for(let i=0; i<syms.length; i+=10) batches.push(syms.slice(i,i+10));
+  // ดึง USD/THB ก่อน (ไม่นับ rate limit)
+  const usdthb=await fetchUsdThb();
 
-  let successCount = 0;
-  for(const batch of batches){
-    const results = await tryFetchYahoo(batch.join(','));
-    if(results){
-      results.forEach(q=>{
-        if(!q.regularMarketPrice) return;
-        LIVE[q.symbol]={
-          price: q.regularMarketPrice,
-          chg:   q.regularMarketChangePercent||0,
-          prev:  q.regularMarketPreviousClose||q.regularMarketPrice,
-          name:  q.shortName||q.symbol,
-        };
-        if(q.symbol==='USDTHB=X') DB.usdthb=q.regularMarketPrice;
-      });
-      successCount += results.length;
+  // ดึงหุ้นทีละตัว — Finnhub ไม่มี batch endpoint ในแผนฟรี
+  // แต่ 60 req/min พอสำหรับพอร์ตปกติ
+  let successCount=0;
+  const errors=[];
+
+  for(const sym of stockSyms){
+    const fSym=toFinnhubSym(sym);
+    if(!fSym) continue;
+    try{
+      const q=await finnhubQuote(fSym);
+      LIVE[sym]={price:q.price, chg:q.chg, prev:q.prev};
+      DB.investments.forEach(i=>{if(i.sym===sym) i.curPrice=q.price;});
+      successCount++;
+      // หน่วงเล็กน้อยเพื่อไม่เกิน rate limit (100ms ต่อตัว)
+      await new Promise(r=>setTimeout(r,120));
+    }catch(e){
+      console.log(`${sym} failed:`,e.message);
+      errors.push(sym);
     }
   }
 
-  if(successCount > 0){
-    // อัปเดตราคาในพอร์ต
-    DB.investments.forEach(i=>{if(LIVE[i.sym]?.price) i.curPrice=LIVE[i.sym].price;});
-    DB._lastFetch = Date.now();
-    saveDB();
-    const t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-    setS(false,`✅ อัปเดต ${t} · ${successCount} ตัว · USD/THB ${fN(DB.usdthb,2)}`);
-    renderPriceBar();
-    const cur=document.querySelector('.nb.active,.sb-btn.active')?.dataset.p;
-    if(cur && renders[cur]) renders[cur]();
+  DB._lastFetch=Date.now();
+  saveDB();
+
+  const t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  if(successCount>0){
+    const errTxt=errors.length?` (ไม่ได้: ${errors.join(',')})`:'';
+    setS(false,`✅ ${t} · ${successCount}/${stockSyms.length} ตัว · USD/THB ${fN(usdthb,2)}${errTxt}`);
   } else {
-    // ลอง fallback ด้วย Stooq API (ไม่ต้อง proxy สำหรับ index ต่างๆ)
-    setS(false,'⚠️ ดึงราคาไม่ได้ — กำลังลอง backup...');
-    await fetchPricesFallback(syms);
-  }
-}
-
-// Fallback: ดึงราคาทีละตัวจาก Yahoo Finance JSON ผ่าน proxy ที่เหมาะสม
-async function fetchPricesFallback(syms){
-  let got=0;
-  // ลองดึงเฉพาะ USDTHB และหุ้นหลักก่อน (max 5 ตัว)
-  const priority = ['USDTHB=X', ...DB.investments.slice(0,4).map(i=>i.sym)];
-  const targets = [...new Set([...priority, ...syms])].slice(0,10);
-
-  for(const sym of targets){
-    const url=`https://query2.finance.yahoo.com/v8/finance/quote?symbols=${sym}&fields=regularMarketPrice,regularMarketChangePercent`;
-    const proxyUrl=`https://corsproxy.io/?url=${encodeURIComponent(url)}`;
-    try{
-      const res=await fetch(proxyUrl,{signal:AbortSignal.timeout(5000)});
-      const json=await res.json();
-      const q=(json?.quoteResponse?.result||[])[0];
-      if(q?.regularMarketPrice){
-        LIVE[q.symbol]={price:q.regularMarketPrice,chg:q.regularMarketChangePercent||0};
-        if(q.symbol==='USDTHB=X') DB.usdthb=q.regularMarketPrice;
-        got++;
-      }
-    }catch(e){}
+    setS(false,`❌ ดึงราคาไม่ได้ — ตรวจสอบ API Key หรือ internet`);
   }
 
-  if(got>0){
-    DB.investments.forEach(i=>{if(LIVE[i.sym]?.price) i.curPrice=LIVE[i.sym].price;});
-    saveDB();
-    const t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-    setS(false,`✅ อัปเดต ${t} · ${got} ตัว (backup) · USD/THB ${fN(DB.usdthb,2)}`);
-    renderPriceBar();
-    const cur=document.querySelector('.nb.active,.sb-btn.active')?.dataset.p;
-    if(cur && renders[cur]) renders[cur]();
-  } else {
-    setS(false,'❌ ดึงราคาไม่ได้ทุก proxy — ใช้ราคาที่บันทึกไว้ล่าสุด');
-  }
+  renderPriceBar();
+  const cur=document.querySelector('.nb.active,.sb-btn.active')?.dataset.p;
+  if(cur&&renders[cur]) renders[cur]();
 }
 function setS(l,t){
   document.getElementById('pspin').style.display=l?'inline-block':'none';
