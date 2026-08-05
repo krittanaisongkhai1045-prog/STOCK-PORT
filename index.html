@@ -224,11 +224,12 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 /* Dashboard chart sizing on desktop */
 @media(min-width:900px){
-  #dash-c1 #d-pie-wrap > div:first-child { min-height:220px }
-  #d-res-c,#d-div-c { height:180px !important }
-  #d-nw-c           { height:200px !important }
-  /* Donut chart — constrain size so it doesn't overflow */
-  #d-pie-wrap canvas { max-height:220px }
+  /* Donut — fixed compact size */
+  #d-pie-wrap > div:first-child { height:200px !important }
+  /* Area/Bar charts */
+  #d-res-c,#d-div-c { height:175px !important }
+  /* Net Worth donut */
+  #d-nw-c { height:190px !important }
 }
 
 /* TOAST */
@@ -625,6 +626,11 @@ function applyDesktopLayout(id){
     if(c1) c1.classList.add('full-w');
     const c4=document.getElementById('dash-c4');
     if(c4) c4.classList.add('full-w');
+    // Net worth always full-w — also set directly
+    setTimeout(()=>{
+      const c4b=document.getElementById('dash-c4');
+      if(c4b) c4b.style.gridColumn='1/-1';
+    },50);
   }
   if(id==='money') pg.querySelectorAll('.stabs,#money-content').forEach(el=>el.classList.add('full-w'));
   if(id==='rebal') pg.querySelectorAll('.card,#reb-out').forEach(el=>el.classList.add('full-w'));
@@ -766,7 +772,7 @@ function rDash(){
       <span class="ct" style="color:var(--p)">⚖️ ตัวชี้วัดอิสระทางการเงิน</span>
     </div>
     <div class="cb" style="padding:14px">
-      <div style="position:relative;height:180px"><canvas id="d-nw-c"></canvas></div>
+      <div style="max-width:300px;margin:0 auto;position:relative;height:200px"><canvas id="d-nw-c"></canvas></div>
       <div id="d-nw-info" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;justify-content:center"></div>
       <div id="d-nw-score" style="text-align:center;margin-top:10px"></div>
     </div>
@@ -786,7 +792,7 @@ function renderDashCharts(inv,res,div,debt,assets,netWorth){
   const wrap=document.getElementById('d-pie-wrap');
   destroyChart('pie');
   if(sk.length){
-    wrap.innerHTML=`<div style="position:relative;height:190px"><canvas id="d-pie-c"></canvas></div>
+    wrap.innerHTML=`<div style="max-width:280px;margin:0 auto;position:relative;height:200px"><canvas id="d-pie-c"></canvas></div>
     <div style="text-align:center;margin:8px 0 4px">
       <span class="mono ${inv.pnl>=0?'pos':'neg'}" style="font-size:13px;font-weight:700">${inv.pnl>=0?'+':''}${fB(inv.pnl)} (${fP(inv.pnlP)})</span>
       <div style="font-size:9px;color:var(--muted);margin-top:1px">กำไร/ขาดทุน vs ต้นทุน ${fB(inv.cost)}</div>
@@ -806,13 +812,13 @@ function renderDashCharts(inv,res,div,debt,assets,netWorth){
   const ctxR=document.getElementById('d-res-c').getContext('2d');
   const gR=ctxR.createLinearGradient(0,0,0,170);
   gR.addColorStop(0,'rgba(0,223,160,0.4)');gR.addColorStop(1,'rgba(0,223,160,0)');
-  charts.res=new Chart(ctxR,{type:'line',data:{labels,datasets:[{label:'ยอดออมสะสม',data:resData,borderColor:'#00dfa0',backgroundColor:gR,borderWidth:2,fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#00dfa0',pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(17,20,34,.95)',bodyColor:'#7c85aa',padding:8,cornerRadius:8,callbacks:{label:c=>` ${fB(c.raw)}`}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},maxRotation:0}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},callback:v=>v>=1000000?`${fN(v/1000000,1)}M`:v>=1000?`${fN(v/1000,0)}k`:fN(v,0)}}}}}); 
+  charts.res=new Chart(ctxR,{type:'line',data:{labels,datasets:[{label:'ยอดออมสะสม',data:resData,borderColor:'#00dfa0',backgroundColor:gR,borderWidth:2,fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#00dfa0',pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(17,20,34,.95)',bodyColor:'#7c85aa',padding:8,cornerRadius:8,callbacks:{label:c=>` ${fB(c.raw)}`}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},maxRotation:0}},y:{min:0,grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},callback:v=>v>=1000000?`${fN(v/1000000,1)}M`:v>=1000?`${fN(v/1000,0)}k`:fN(v,0)},beginAtZero:true}}}}); 
 
   // ── Chart 3: Bar ปันผลรายเดือน ──
   destroyChart('div');
   const divData=buildDivData(months);
   const ctxD=document.getElementById('d-div-c').getContext('2d');
-  charts.div=new Chart(ctxD,{type:'bar',data:{labels,datasets:[{label:'ปันผล (฿)',data:divData,backgroundColor:divData.map(v=>v>0?'rgba(240,183,48,0.8)':'rgba(255,255,255,0.05)'),borderColor:divData.map(v=>v>0?'#f0b730':'transparent'),borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(17,20,34,.95)',bodyColor:'#7c85aa',padding:8,cornerRadius:8,callbacks:{label:c=>` ${fB(c.raw)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#515878',font:{size:10},maxRotation:0}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},callback:v=>v>=1000?`${fN(v/1000,0)}k`:fN(v,0)}}}}});
+  charts.div=new Chart(ctxD,{type:'bar',data:{labels,datasets:[{label:'ปันผล (฿)',data:divData,backgroundColor:divData.map(v=>v>0?'rgba(240,183,48,0.8)':'rgba(255,255,255,0.05)'),borderColor:divData.map(v=>v>0?'#f0b730':'transparent'),borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(17,20,34,.95)',bodyColor:'#7c85aa',padding:8,cornerRadius:8,callbacks:{label:c=>` ${fB(c.raw)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#515878',font:{size:10},maxRotation:0}},y:{min:0,grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#515878',font:{size:10},callback:v=>v>=1000?`${fN(v/1000,0)}k`:fN(v,0)},beginAtZero:true}}}});
 
   // ── Chart 4: Net Worth Doughnut สินทรัพย์ vs หนี้ ──
   destroyChart('nw');
