@@ -222,14 +222,31 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 @media(min-width:900px) and (max-width:1199px){.page.active{grid-template-columns:1fr}}
 @media(min-width:1400px){.page.active{grid-template-columns:1fr 1fr 1fr}}
 
-/* Dashboard chart sizing on desktop */
+/* Dashboard layout on desktop */
 @media(min-width:900px){
-  /* Donut — fixed compact size */
-  #d-pie-wrap > div:first-child { height:200px !important }
-  /* Area/Bar charts */
-  #d-res-c,#d-div-c { height:175px !important }
-  /* Net Worth donut */
-  #d-nw-c { height:190px !important }
+  /* Override page grid for dash: 3 equal columns */
+  #pg-dash.active {
+    grid-template-columns: 1fr 1fr 1fr !important;
+    grid-template-rows: auto;
+  }
+  /* Grand KPI — full width row 1 */
+  #pg-dash .kg.c1 { grid-column:1/-1 }
+  /* KPI rows — full width */
+  #dash-kpi2,#dash-kpi3 { grid-column:1/-1 }
+  /* Chart 1 Donut — col 1 only */
+  #dash-c1 { grid-column:1 }
+  /* Chart 2 Reserve + Chart 3 Dividend — col 2 & 3 */
+  #dash-c2 { grid-column:2 }
+  #dash-c3 { grid-column:3 }
+  /* Chart 4 Net Worth — full width */
+  #dash-c4 { grid-column:1/-1 }
+  /* Donut max size */
+  #d-pie-wrap > div { height:210px !important }
+  /* Net Worth donut in 3-col row — constrain */
+  #dash-c4 .cb { display:flex; align-items:flex-start; gap:24px; flex-wrap:wrap }
+  #dash-c4 #d-nw-c { height:200px !important; width:200px !important; flex-shrink:0 }
+  /* Reserve & Div charts */
+  #d-res-c,#d-div-c { height:180px !important }
 }
 
 /* TOAST */
@@ -244,8 +261,13 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 <div id="app">
 <div class="topbar">
   <div class="logo">⬡ WealthOS</div>
-  <div id="tt"></div>
-  <div id="ta"></div>
+  <div id="tt" style="flex:1;text-align:center"></div>
+  <div style="display:flex;gap:5px;align-items:center">
+    <button onclick="exportData()" title="Export ข้อมูล" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px">💾</button>
+    <button onclick="document.getElementById('imp-file').click()" title="Import ข้อมูล" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px">📂</button>
+    <div id="ta"></div>
+  </div>
+  <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importData(this)">
 </div>
 <div class="sbar">
   <div class="spin" id="pspin" style="display:none"></div>
@@ -274,6 +296,11 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   <div style="padding:8px 8px 0">
     <button class="btn btn-ghost btn-full btn-sm" onclick="fetchPrices()" style="font-size:11px">🔄 รีเฟรชราคา</button>
   </div>
+  <div style="padding:6px 8px 0;display:flex;gap:5px">
+    <button class="btn btn-ghost btn-full btn-sm" onclick="exportData()" style="font-size:11px;flex:1">💾 Export</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="document.getElementById('imp-file-sb').click()" style="font-size:11px;flex:1">📂 Import</button>
+  </div>
+  <input type="file" id="imp-file-sb" accept=".json" style="display:none" onchange="importData(this)">
 </div>
 
 <!-- DESKTOP MAIN -->
@@ -621,16 +648,7 @@ function applyDesktopLayout(id){
   const pg=document.getElementById('pg-'+id);
   if(!pg||window.innerWidth<900) return;
   if(id==='dash'){
-    pg.querySelectorAll('.kg').forEach(el=>el.classList.add('full-w'));
-    const c1=document.getElementById('dash-c1');
-    if(c1) c1.classList.add('full-w');
-    const c4=document.getElementById('dash-c4');
-    if(c4) c4.classList.add('full-w');
-    // Net worth always full-w — also set directly
-    setTimeout(()=>{
-      const c4b=document.getElementById('dash-c4');
-      if(c4b) c4b.style.gridColumn='1/-1';
-    },50);
+    // Layout controlled by CSS grid-column on IDs — no JS needed
   }
   if(id==='money') pg.querySelectorAll('.stabs,#money-content').forEach(el=>el.classList.add('full-w'));
   if(id==='rebal') pg.querySelectorAll('.card,#reb-out').forEach(el=>el.classList.add('full-w'));
@@ -772,9 +790,13 @@ function rDash(){
       <span class="ct" style="color:var(--p)">⚖️ ตัวชี้วัดอิสระทางการเงิน</span>
     </div>
     <div class="cb" style="padding:14px">
-      <div style="max-width:300px;margin:0 auto;position:relative;height:200px"><canvas id="d-nw-c"></canvas></div>
-      <div id="d-nw-info" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;justify-content:center"></div>
-      <div id="d-nw-score" style="text-align:center;margin-top:10px"></div>
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+        <div style="position:relative;height:180px;width:180px;flex-shrink:0"><canvas id="d-nw-c"></canvas></div>
+        <div style="flex:1;min-width:200px">
+          <div id="d-nw-score" style="margin-bottom:12px"></div>
+          <div id="d-nw-info" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+      </div>
     </div>
   </div>`;
 
@@ -792,7 +814,7 @@ function renderDashCharts(inv,res,div,debt,assets,netWorth){
   const wrap=document.getElementById('d-pie-wrap');
   destroyChart('pie');
   if(sk.length){
-    wrap.innerHTML=`<div style="max-width:280px;margin:0 auto;position:relative;height:200px"><canvas id="d-pie-c"></canvas></div>
+    wrap.innerHTML=`<div style="height:210px;position:relative"><canvas id="d-pie-c"></canvas></div>
     <div style="text-align:center;margin:8px 0 4px">
       <span class="mono ${inv.pnl>=0?'pos':'neg'}" style="font-size:13px;font-weight:700">${inv.pnl>=0?'+':''}${fB(inv.pnl)} (${fP(inv.pnlP)})</span>
       <div style="font-size:9px;color:var(--muted);margin-top:1px">กำไร/ขาดทุน vs ต้นทุน ${fB(inv.cost)}</div>
@@ -800,7 +822,7 @@ function renderDashCharts(inv,res,div,debt,assets,netWorth){
     <div id="d-pie-leg" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>`;
     const ctx=document.getElementById('d-pie-c').getContext('2d');
     charts.pie=new Chart(ctx,{type:'doughnut',data:{labels:sk.map(k=>SEC[k]?.label||k),datasets:[{data:sk.map(k=>secV[k]),backgroundColor:sk.map(k=>SEC[k]?.color||'#888'),borderColor:'#0b0e1a',borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fB(c.raw)} (${fN(c.raw/totalInvV*100)}%)`}}}}});
-    document.getElementById('d-pie-leg').innerHTML=sk.map(k=>`<div style="display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="width:10px;height:10px;border-radius:3px;background:${SEC[k]?.color};flex-shrink:0"></span><span style="color:var(--muted2);flex:1;font-size:11px">${SEC[k]?.label||k}</span><span class="mono" style="color:${SEC[k]?.color};font-size:11px;font-weight:600">${fB(secV[k])}</span><span style="color:var(--muted);font-size:10px;min-width:38px;text-align:right">${fN(secV[k]/totalInvV*100)}%</span></div>`).join('');
+    document.getElementById('d-pie-leg').innerHTML=sk.map(k=>`<div style="display:flex;align-items:center;gap:7px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="width:10px;height:10px;border-radius:3px;background:${SEC[k]?.color};flex-shrink:0"></span><span style="color:var(--muted2);flex:1;font-size:11px">${SEC[k]?.label||k}</span><span class="mono" style="color:${SEC[k]?.color};font-size:11px;font-weight:600">${fB(secV[k])}</span><span style="color:var(--muted);font-size:10px;min-width:38px;text-align:right">${fN(secV[k]/totalInvV*100)}%</span></div>`).join('');
   }else{
     wrap.innerHTML=`<div style="text-align:center;padding:28px;color:var(--muted);font-size:12px"><div style="font-size:28px;margin-bottom:8px">📈</div>ยังไม่มีสินทรัพย์<br><button class="btn btn-b btn-sm" style="margin-top:10px" onclick="go('invest')">+ เพิ่มสินทรัพย์</button></div>`;
   }
@@ -1704,6 +1726,66 @@ function doDelete(sec,id){
     if(renders[cur])renders[cur]();rDash();
   };
   document.getElementById('m-del').classList.add('open');
+}
+
+/* ══ EXPORT / IMPORT ══════════════════════════════════════════════════
+   ใช้ย้ายข้อมูลจาก browser → PWA หรือสำรองข้อมูลไว้
+════════════════════════════════════════════════════════════════════ */
+function exportData(){
+  const data = JSON.stringify(DB, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().split('T')[0];
+  a.href     = url;
+  a.download = `wealthos-backup-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`💾 Export สำเร็จ — wealthos-backup-${date}.json`);
+}
+
+function importData(input){
+  const file = input.files[0];
+  if(!file){ return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const imported = JSON.parse(e.target.result);
+      // ตรวจสอบว่าเป็น WealthOS data จริง
+      if(!imported.investments && !imported.reserve && !imported.debts){
+        toast('ไฟล์ไม่ถูกต้อง — ต้องเป็น WealthOS backup เท่านั้น', false);
+        return;
+      }
+      // Merge หรือ Replace?
+      const hasExisting = DB.investments.length || DB.reserve.length || DB.debts.length;
+      if(hasExisting){
+        if(!confirm(`มีข้อมูลอยู่แล้วในแอพ\nต้องการ "แทนที่ทั้งหมด" ด้วยข้อมูลที่นำเข้าใช่ไหม?\n\n(กด OK = แทนที่ | Cancel = ยกเลิก)`)){
+          input.value=''; return;
+        }
+      }
+      // นำเข้าข้อมูล
+      DB = {
+        investments:   imported.investments   || [],
+        reserve:       imported.reserve       || [],
+        dividends:     imported.dividends     || [],
+        debts:         imported.debts         || [],
+        debtPayments:  imported.debtPayments  || [],
+        usdthb:        imported.usdthb        || 35.0,
+        _chartRange:   imported._chartRange   || 12,
+      };
+      saveDB();
+      // Re-render หน้าปัจจุบัน
+      const cur = document.querySelector('.nb.active,.sb-btn.active')?.dataset.p || 'dash';
+      go(cur);
+      toast(`✅ Import สำเร็จ — ${DB.investments.length} หุ้น, ${DB.reserve.length} ธุรกรรม, ${DB.debts.length} หนี้`);
+    }catch(err){
+      toast('ไฟล์เสียหาย หรือรูปแบบไม่ถูกต้อง', false);
+    }
+    input.value = ''; // reset เพื่อให้เลือกไฟล์เดิมซ้ำได้
+  };
+  reader.readAsText(file);
 }
 
 /* ══ INIT ════════════════════════════════════════════════════════════ */
