@@ -498,6 +498,68 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   <div class="mfoot"><button class="btn btn-g btn-full" onclick="saveDiv()">💾 บันทึกปันผล</button><button class="btn btn-ghost" onclick="cm('m-div')">ยกเลิก</button></div>
 </div></div>
 
+<!-- FIRST PORTFOLIO SETUP WIZARD -->
+<div class="mov" id="m-setup"><div class="modal">
+  <div class="mh2"></div>
+  <div class="mhead">
+    <div class="mtitle">🚀 สร้างพอร์ตครั้งแรก</div>
+    <button class="btn btn-ghost btn-xs" onclick="cm('m-setup')">✕</button>
+  </div>
+  <div class="mbody">
+    <!-- Step 1: งบประมาณ -->
+    <div id="setup-s1">
+      <div style="background:rgba(75,150,255,.08);border:1px solid rgba(75,150,255,.2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--muted2);line-height:1.8">
+        <b style="color:var(--b)">วิธีใช้:</b><br>
+        1. กรอกงบประมาณที่มี<br>
+        2. เพิ่ม/ลบหุ้นและตั้ง % เป้าหมาย<br>
+        3. ระบบคำนวณว่าต้องซื้อกี่หุ้น<br>
+        4. กด "บันทึกพอร์ตทั้งหมด" ในครั้งเดียว
+      </div>
+      <div class="fg">
+        <label class="fl">💰 งบประมาณทั้งหมด (฿)</label>
+        <input class="fi" type="number" id="sw-budget" placeholder="เช่น 100000" step="any" min="0" oninput="calcSetup()">
+      </div>
+      <div class="fg">
+        <label class="fl">อัตราแลกเปลี่ยน USD/THB</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="fi" type="number" id="sw-fx" placeholder="35.00" step="0.01" style="flex:1" oninput="calcSetup()">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sw-fx').value=fN(DB.usdthb,2).replace(/,/g,'');calcSetup()">ใช้ค่าปัจจุบัน ${fN(DB.usdthb,2)}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- รายการหุ้น -->
+    <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span>📋 รายการหุ้นในพอร์ต</span>
+      <span id="sw-pct-total" class="tag tm">0%</span>
+    </div>
+    <div id="sw-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rads);margin-bottom:10px"></div>
+
+    <!-- เพิ่มหุ้น -->
+    <div style="display:flex;gap:7px;margin-bottom:12px">
+      <div style="position:relative;flex:1">
+        <input class="fi" id="sw-add-sym" placeholder="พิมพ์ Symbol เพิ่ม..." list="sdl" autocomplete="off"
+          style="padding-right:36px" onkeydown="if(event.key==='Enter')addSetupRow()">
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none">🔍</span>
+      </div>
+      <button class="btn btn-b btn-sm" onclick="addSetupRow()">+ เพิ่ม</button>
+    </div>
+
+    <!-- ผลคำนวณ -->
+    <div id="sw-result" style="display:none">
+      <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:var(--g)">📊 ผลการคำนวณ</div>
+      <div id="sw-result-list"></div>
+      <div id="sw-sum" style="padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:11px;margin-top:6px"></div>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-g btn-full" onclick="confirmSetup()" id="sw-confirm-btn" disabled style="opacity:.4">
+      💾 บันทึกพอร์ตทั้งหมด
+    </button>
+    <button class="btn btn-ghost" onclick="cm('m-setup')">ยกเลิก</button>
+  </div>
+</div></div>
+
 <!-- DELETE -->
 <div class="mov" id="m-del"><div class="modal" style="border-radius:18px">
   <div class="mh2"></div>
@@ -866,7 +928,7 @@ function applyDesktopLayout(id){
 /* ══ NAVIGATION ════════════════════════════════════════════════════ */
 const PM={
   dash:  {title:'📊 ภาพรวม',  btn:''},
-  invest:{title:'📈 ลงทุน',   btn:`<button class="btn btn-b btn-sm" onclick="om('m-inv','new')">+ เพิ่ม</button>`},
+  invest:{title:'📈 ลงทุน',   btn:`<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openSetup()" title="สร้างพอร์ตครั้งแรก">🚀 ตั้งพอร์ต</button><button class="btn btn-b btn-sm" onclick="om('m-inv','new')">+ เพิ่ม</button></div>`},
   rebal: {title:'⚖️ Rebalance',btn:''},
   money: {title:'🏦 การเงิน', btn:''},
   scan:  {title:'🔍 สแกนหุ้น',btn:`<button class="btn btn-y btn-sm" onclick="om('m-div','new')">+ ปันผล</button>`},
@@ -2086,6 +2148,154 @@ function doDelete(sec,id){
     if(renders[cur])renders[cur]();rDash();
   };
   document.getElementById('m-del').classList.add('open');
+}
+
+/* ══ FIRST PORTFOLIO SETUP WIZARD ══════════════════════════════════ */
+let setupRows=[];
+
+function openSetup(){
+  if(setupRows.length===0){
+    BLUEPRINT.filter(b=>b.tgt>0).forEach(b=>{
+      setupRows.push({sym:b.sym,name:b.name,cat:b.cat,tgt:b.tgt,price:LIVE[b.sym]?.price||0,fetched:!!LIVE[b.sym]});
+    });
+  }
+  const fxEl=document.getElementById('sw-fx');
+  if(fxEl) fxEl.value=fN(DB.usdthb,2).replace(/,/g,'');
+  document.getElementById('m-setup').classList.add('open');
+  renderSetupList();calcSetup();
+  fetchSetupPrices();
+}
+
+async function fetchSetupPrices(){
+  for(const row of setupRows){
+    if(row.price>0) continue;
+    if(LIVE[row.sym]?.price){row.price=LIVE[row.sym].price;row.fetched=true;continue;}
+    try{
+      const q=await finnhubQuote(row.sym);
+      row.price=q.price;row.fetched=true;LIVE[row.sym]={price:q.price,chg:q.chg};
+    }catch(e){row.price=0;row.fetched=false;}
+    renderSetupList();calcSetup();
+    await new Promise(r=>setTimeout(r,200));
+  }
+}
+
+function renderSetupList(){
+  const el=document.getElementById('sw-list');
+  if(!el)return;
+  if(!setupRows.length){
+    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">เพิ่มหุ้นด้านล่าง</div>';
+    return;
+  }
+  const totalTgt=setupRows.reduce((s,r)=>s+(r.tgt||0),0);
+  el.innerHTML=setupRows.map((r,i)=>{
+    const color=SEC[r.cat]?.color||'#888';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${color}">${r.sym}</span>
+          <span class="tag" style="background:${color}18;color:${color};border-color:${color}33;font-size:9px">${SEC[r.cat]?.label||r.cat}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.name}
+          ${r.price>0?`· <b style="color:var(--b)">${fU(r.price)}</b>`:'<span style="color:var(--y)"> · กำลังดึงราคา...</span>'}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <input type="number" value="${r.tgt||0}" min="0" max="100" step="0.5"
+          style="width:52px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 6px;color:var(--text);font-family:'Outfit';font-size:13px;text-align:center;outline:none"
+          onchange="updateSetupTgt(${i},this.value)">
+        <span style="font-size:10px;color:var(--muted)">%</span>
+      </div>
+      <button onclick="removeSetupRow(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;flex-shrink:0;padding:2px 4px">✕</button>
+    </div>`;
+  }).join('');
+  const tot=document.getElementById('sw-pct-total');
+  if(tot){tot.textContent=`รวม ${fN(totalTgt,1)}%`;tot.className=`tag ${Math.abs(totalTgt-100)<0.1?'tg':totalTgt>100?'tr':'ty'}`;}
+}
+
+function updateSetupTgt(i,v){if(setupRows[i])setupRows[i].tgt=parseFloat(v)||0;renderSetupList();calcSetup();}
+function removeSetupRow(i){setupRows.splice(i,1);renderSetupList();calcSetup();}
+
+function addSetupRow(){
+  const inp=document.getElementById('sw-add-sym');
+  const sym=(inp?.value||'').toUpperCase().trim();
+  if(!sym){toast('กรุณาพิมพ์ Symbol',false);return;}
+  if(setupRows.find(r=>r.sym===sym)){toast(`${sym} มีอยู่แล้ว`,false);return;}
+  const bp=KNOWN[sym];
+  const row={sym,name:bp?.name||sym,cat:bp?.cat||'OTHER',tgt:bp?.tgt||0,price:LIVE[sym]?.price||0,fetched:!!LIVE[sym]};
+  setupRows.push(row);inp.value='';
+  renderSetupList();calcSetup();
+  if(!row.price){
+    finnhubQuote(sym).then(q=>{row.price=q.price;row.fetched=true;LIVE[sym]={price:q.price,chg:q.chg};renderSetupList();calcSetup();}).catch(()=>{});
+  }
+}
+
+function calcSetup(){
+  const budget=parseFloat(document.getElementById('sw-budget')?.value)||0;
+  const fx=parseFloat(document.getElementById('sw-fx')?.value)||DB.usdthb||35;
+  const totalTgt=setupRows.reduce((s,r)=>s+(r.tgt||0),0);
+  const resultDiv=document.getElementById('sw-result');
+  const confirmBtn=document.getElementById('sw-confirm-btn');
+  if(!budget||!setupRows.length){
+    if(resultDiv)resultDiv.style.display='none';
+    if(confirmBtn){confirmBtn.disabled=true;confirmBtn.style.opacity='.4';}
+    return;
+  }
+  const rows=setupRows.map(r=>{
+    const allocBaht=budget*(r.tgt/100);
+    const shares=r.price>0?(allocBaht/fx)/r.price:0;
+    const actualBaht=shares*r.price*fx;
+    return{...r,allocBaht,shares,actualBaht};
+  });
+  const totalUsed=rows.reduce((s,r)=>s+r.actualBaht,0);
+  const remaining=budget-totalUsed;
+  if(resultDiv)resultDiv.style.display='block';
+
+  const listEl=document.getElementById('sw-result-list');
+  if(listEl){
+    listEl.innerHTML=rows.map(r=>{
+      const color=SEC[r.cat]?.color||'#888';
+      return`<div style="padding:9px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;font-size:12px">
+        <div>
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${color};font-size:13px">${r.sym}</span>
+          <span style="color:var(--muted);margin-left:4px">${r.tgt}%</span>
+        </div>
+        <div style="text-align:right;color:var(--muted2)">${fB(r.allocBaht)}</div>
+        <div style="text-align:right">
+          ${r.price>0?`<div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;color:var(--g)">${fN(r.shares,r.shares<1?4:2)}</div><div style="font-size:9px;color:var(--muted)">หุ้น</div>`
+                    :`<div style="color:var(--y);font-size:10px">ไม่มีราคา</div>`}
+        </div>
+        <div style="text-align:right;color:var(--muted2);font-size:10px">${r.price>0?fU(r.price):'—'}</div>
+      </div>`;
+    }).join('')+`<div style="padding:7px 12px;display:grid;grid-template-columns:1fr auto auto auto;gap:8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text)">
+      <span>รวม</span><span style="text-align:right">${fB(totalUsed)}</span><span></span><span></span>
+    </div>`;
+  }
+  const sumEl=document.getElementById('sw-sum');
+  if(sumEl){sumEl.innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--muted2)">งบประมาณ</span><span class="mono">${fB(budget)}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--muted2)">ใช้ไป</span><span class="mono" style="color:var(--b)">${fB(totalUsed)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-weight:700"><span style="color:var(--muted2)">เงินเหลือ</span><span class="mono ${remaining>=0?'pos':'neg'}">${fB(remaining)}</span></div>
+    ${Math.abs(totalTgt-100)>0.5?`<div style="color:var(--y);font-size:10px;margin-top:4px">⚠️ % รวม ${fN(totalTgt,1)}%</div>`:''}
+  `;}
+  const ready=rows.some(r=>r.shares>0);
+  if(confirmBtn){confirmBtn.disabled=!ready;confirmBtn.style.opacity=ready?'1':'.4';}
+  window._setupCalc={rows,fx,budget};
+}
+
+async function confirmSetup(){
+  const calc=window._setupCalc;
+  if(!calc)return;
+  const date=today();let added=0;
+  for(const r of calc.rows){
+    if(r.shares<=0||r.price<=0) continue;
+    const exists=DB.investments.find(i=>i.sym===r.sym);
+    if(exists){exists.qty+=r.shares;exists.totalBaht+=r.actualBaht;exists.curPrice=r.price;}
+    else DB.investments.push({id:uid(),sym:r.sym,name:r.name,cat:r.cat,date,qty:r.shares,buyPrice:r.price,totalBaht:r.actualBaht,curPrice:r.price,tgt:r.tgt});
+    added++;
+  }
+  saveDB();cm('m-setup');setupRows=[];window._setupCalc=null;
+  toast(`✅ บันทึกพอร์ต ${added} สินทรัพย์เรียบร้อย`);
+  rInvest();rDash();
 }
 
 /* ══ EXPORT / IMPORT ══════════════════════════════════════════════════
