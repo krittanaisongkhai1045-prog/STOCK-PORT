@@ -333,7 +333,27 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   <div class="mh2"></div>
   <div class="mhead"><div class="mtitle" id="mi-t">➕ เพิ่มสินทรัพย์</div><button class="btn btn-ghost btn-xs" onclick="cm('m-inv')">✕</button></div>
   <div class="mbody">
-    <div class="fg"><label class="fl">Symbol</label><input class="fi" id="mi-sym" placeholder="เช่น NVDA, IVV..." list="sdl" autocomplete="off" oninput="onSym(this.value)"><datalist id="sdl"></datalist><div class="fhint ok" id="mi-sh"></div></div>
+    <div class="fg">
+      <label class="fl">Symbol / ชื่อสินทรัพย์</label>
+      <!-- Search box -->
+      <div style="position:relative">
+        <input class="fi" id="mi-sym" placeholder="พิมพ์ค้นหา หรือเลือกจากรายการด้านล่าง..."
+          autocomplete="off" oninput="onSymSearch(this.value)" onfocus="showSymPicker()"
+          style="padding-right:36px">
+        <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none">🔍</span>
+      </div>
+      <div class="fhint ok" id="mi-sh"></div>
+      <!-- Dropdown picker -->
+      <div id="sym-picker" style="display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rads);margin-top:4px;max-height:300px;overflow-y:auto;z-index:600;position:relative">
+        <div id="sym-picker-body"></div>
+        <!-- กรอกเอง row -->
+        <div style="padding:9px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted2);font-size:12px"
+          onclick="selectSym('CUSTOM')">
+          <span style="font-size:15px">✏️</span>
+          <span>กรอก Symbol เองที่ไม่มีในรายการ</span>
+        </div>
+      </div>
+    </div>
     <div class="fg"><label class="fl">ชื่อเต็ม</label><input class="fi" id="mi-name" placeholder="ชื่อสินทรัพย์"></div>
     <div class="fr">
       <div class="fg"><label class="fl">Sector</label><select class="fs" id="mi-cat"><option value="BASE">🏛️ ฐาน</option><option value="BRAIN">🧠 Software/AI</option><option value="SEMI">🔬 Semiconductor</option><option value="CYBER">🔐 Cybersecurity</option><option value="ENERGY">⚡ Energy</option><option value="MATERIAL">🪨 วัตถุดิบ</option><option value="OTHER">📦 อื่นๆ</option></select></div>
@@ -344,7 +364,32 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
       <div class="fg"><label class="fl">ราคาซื้อ (USD)</label><input class="fi" type="number" id="mi-buy" placeholder="0.00" step="any" oninput="calcTotal()"></div>
     </div>
     <div class="fg"><label class="fl">เงินที่ลงทุน (฿)</label><input class="fi" type="number" id="mi-total" placeholder="คำนวณอัตโนมัติ" step="any"><div class="fhint" id="mi-th"></div></div>
-    <div class="fg"><label class="fl">ราคาปัจจุบัน (USD)</label><input class="fi" type="number" id="mi-cur" placeholder="0.00" step="any"><div class="fhint ok" id="mi-ch"></div></div>
+    <div class="fg">
+      <label class="fl">ราคาปัจจุบัน (USD)</label>
+      <!-- Toggle: Auto / Manual -->
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button type="button" id="cur-btn-auto" onclick="setCurMode('auto')"
+          style="flex:1;padding:7px;border-radius:7px;border:1px solid var(--b);background:var(--ba);color:var(--b);font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer">
+          📡 ดึงอัตโนมัติ
+        </button>
+        <button type="button" id="cur-btn-manual" onclick="setCurMode('manual')"
+          style="flex:1;padding:7px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted2);font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer">
+          ✏️ กรอกเอง
+        </button>
+      </div>
+      <!-- Auto mode -->
+      <div id="cur-auto-wrap">
+        <div id="mi-ch" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rads);font-size:13px;color:var(--muted2);min-height:42px;display:flex;align-items:center;gap:8px">
+          <span id="mi-ch-txt">พิมพ์ Symbol ด้านบนเพื่อดึงราคาอัตโนมัติ</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">ราคาจาก Finnhub API — อัปเดตทุกครั้งที่เปิดแอพ</div>
+      </div>
+      <!-- Manual mode -->
+      <div id="cur-manual-wrap" style="display:none">
+        <input class="fi" type="number" id="mi-cur" placeholder="0.00" step="any" oninput="calcTotal()">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">กรอกราคาเอง — ต้องอัปเดตด้วยตัวเองทุกครั้ง</div>
+      </div>
+    </div>
     <div class="fg"><label class="fl">% เป้าหมายในพอร์ต</label><input class="fi" type="number" id="mi-tgt" placeholder="เช่น 30" step="0.5" min="0" max="100"></div>
   </div>
   <div class="mfoot"><button class="btn btn-b btn-full" onclick="saveInv()">💾 บันทึก</button><button class="btn btn-ghost" onclick="cm('m-inv')">ยกเลิก</button></div>
@@ -450,34 +495,173 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 'use strict';
 /* ══ KNOWN ASSETS ═══════════════════════════════════════════════════ */
 const BLUEPRINT=[
-  {sym:'IVV',name:'iShares Core S&P 500 ETF',cat:'BASE',tgt:30},
-  {sym:'VNM',name:'VanEck Vietnam ETF',cat:'BASE',tgt:10},
-  {sym:'TSM',name:'Taiwan Semiconductor',cat:'SEMI',tgt:5},
-  {sym:'ASML',name:'ASML Holding NV',cat:'SEMI',tgt:5},
-  {sym:'GOOGL',name:'Alphabet Inc.',cat:'BRAIN',tgt:5},
-  {sym:'BRK.B',name:'Berkshire Hathaway B',cat:'BASE',tgt:5},
-  {sym:'NVDA',name:'NVIDIA Corporation',cat:'SEMI',tgt:2.5},
-  {sym:'IONQ',name:'IonQ Inc.',cat:'BRAIN',tgt:2.5},
-  {sym:'ISRG',name:'Intuitive Surgical',cat:'BRAIN',tgt:2.5},
-  {sym:'CRWD',name:'CrowdStrike Holdings',cat:'CYBER',tgt:2.5},
-  {sym:'DNA',name:'Ginkgo Bioworks',cat:'BRAIN',tgt:2.5},
-  {sym:'ENPH',name:'Enphase Energy',cat:'ENERGY',tgt:2.5},
-  {sym:'CPER',name:'US Copper Index Fund',cat:'MATERIAL',tgt:2},
-  {sym:'SLV',name:'iShares Silver Trust',cat:'MATERIAL',tgt:2},
-  {sym:'GOLD',name:'Barrick Gold Corp',cat:'MATERIAL',tgt:1},
-  {sym:'AAPL',name:'Apple Inc.',cat:'BRAIN',tgt:0},
-  {sym:'MSFT',name:'Microsoft Corp.',cat:'BRAIN',tgt:0},
-  {sym:'AMZN',name:'Amazon.com Inc.',cat:'BRAIN',tgt:0},
-  {sym:'META',name:'Meta Platforms',cat:'BRAIN',tgt:0},
-  {sym:'AMD',name:'Advanced Micro Devices',cat:'SEMI',tgt:0},
-  {sym:'QQQ',name:'Invesco QQQ Trust',cat:'BASE',tgt:0},
-  {sym:'SPY',name:'SPDR S&P 500 ETF',cat:'BASE',tgt:0},
-  {sym:'BTC',name:'Bitcoin',cat:'OTHER',tgt:0},
-  {sym:'ETH',name:'Ethereum',cat:'OTHER',tgt:0},
+  // ── ฐาน (Base) ──────────────────────────────────────────────────
+  {sym:'IVV',  name:'iShares Core S&P 500 ETF',     cat:'BASE',tgt:30},
+  {sym:'VNM',  name:'VanEck Vietnam ETF',            cat:'BASE',tgt:10},
+  {sym:'BRK.B',name:'Berkshire Hathaway B',          cat:'BASE',tgt:5},
+  {sym:'QQQ',  name:'Invesco QQQ Trust',             cat:'BASE',tgt:0},
+  {sym:'SPY',  name:'SPDR S&P 500 ETF',              cat:'BASE',tgt:0},
+  {sym:'VTI',  name:'Vanguard Total Stock Market',   cat:'BASE',tgt:0},
+  {sym:'VOO',  name:'Vanguard S&P 500 ETF',          cat:'BASE',tgt:0},
+  {sym:'DIA',  name:'SPDR Dow Jones Industrial ETF', cat:'BASE',tgt:0},
+  {sym:'BRK.A',name:'Berkshire Hathaway A',          cat:'BASE',tgt:0},
+  // ── Software / AI ───────────────────────────────────────────────
+  {sym:'GOOGL',name:'Alphabet Inc.',                 cat:'BRAIN',tgt:5},
+  {sym:'MSFT', name:'Microsoft Corp.',               cat:'BRAIN',tgt:0},
+  {sym:'AAPL', name:'Apple Inc.',                    cat:'BRAIN',tgt:0},
+  {sym:'META', name:'Meta Platforms',                cat:'BRAIN',tgt:0},
+  {sym:'AMZN', name:'Amazon.com Inc.',               cat:'BRAIN',tgt:0},
+  {sym:'TSLA', name:'Tesla Inc.',                    cat:'BRAIN',tgt:0},
+  {sym:'IONQ', name:'IonQ Inc.',                     cat:'BRAIN',tgt:2.5},
+  {sym:'ISRG', name:'Intuitive Surgical',            cat:'BRAIN',tgt:2.5},
+  {sym:'DNA',  name:'Ginkgo Bioworks',               cat:'BRAIN',tgt:2.5},
+  {sym:'PLTR', name:'Palantir Technologies',         cat:'BRAIN',tgt:0},
+  {sym:'AI',   name:'C3.ai Inc.',                    cat:'BRAIN',tgt:0},
+  {sym:'PATH', name:'UiPath Inc.',                   cat:'BRAIN',tgt:0},
+  {sym:'SNOW', name:'Snowflake Inc.',                cat:'BRAIN',tgt:0},
+  {sym:'SHOP', name:'Shopify Inc.',                  cat:'BRAIN',tgt:0},
+  {sym:'NET',  name:'Cloudflare Inc.',               cat:'BRAIN',tgt:0},
+  {sym:'DDOG', name:'Datadog Inc.',                  cat:'BRAIN',tgt:0},
+  {sym:'UBER', name:'Uber Technologies',             cat:'BRAIN',tgt:0},
+  {sym:'NFLX', name:'Netflix Inc.',                  cat:'BRAIN',tgt:0},
+  // ── Semiconductor ───────────────────────────────────────────────
+  {sym:'NVDA', name:'NVIDIA Corporation',            cat:'SEMI',tgt:2.5},
+  {sym:'TSM',  name:'Taiwan Semiconductor',          cat:'SEMI',tgt:5},
+  {sym:'ASML', name:'ASML Holding NV',               cat:'SEMI',tgt:5},
+  {sym:'AMD',  name:'Advanced Micro Devices',        cat:'SEMI',tgt:0},
+  {sym:'INTC', name:'Intel Corporation',             cat:'SEMI',tgt:0},
+  {sym:'QCOM', name:'Qualcomm Inc.',                 cat:'SEMI',tgt:0},
+  {sym:'AVGO', name:'Broadcom Inc.',                 cat:'SEMI',tgt:0},
+  {sym:'MU',   name:'Micron Technology',             cat:'SEMI',tgt:0},
+  {sym:'AMAT', name:'Applied Materials',             cat:'SEMI',tgt:0},
+  {sym:'LRCX', name:'Lam Research Corp.',            cat:'SEMI',tgt:0},
+  {sym:'KLAC', name:'KLA Corporation',               cat:'SEMI',tgt:0},
+  {sym:'MRVL', name:'Marvell Technology',            cat:'SEMI',tgt:0},
+  {sym:'SMCI', name:'Super Micro Computer',          cat:'SEMI',tgt:0},
+  // ── Cybersecurity ───────────────────────────────────────────────
+  {sym:'CRWD', name:'CrowdStrike Holdings',          cat:'CYBER',tgt:2.5},
+  {sym:'PANW', name:'Palo Alto Networks',            cat:'CYBER',tgt:0},
+  {sym:'FTNT', name:'Fortinet Inc.',                 cat:'CYBER',tgt:0},
+  {sym:'ZS',   name:'Zscaler Inc.',                  cat:'CYBER',tgt:0},
+  {sym:'S',    name:'SentinelOne Inc.',              cat:'CYBER',tgt:0},
+  {sym:'OKTA', name:'Okta Inc.',                     cat:'CYBER',tgt:0},
+  {sym:'CYBR', name:'CyberArk Software',             cat:'CYBER',tgt:0},
+  // ── Energy ──────────────────────────────────────────────────────
+  {sym:'ENPH', name:'Enphase Energy',                cat:'ENERGY',tgt:2.5},
+  {sym:'FSLR', name:'First Solar Inc.',              cat:'ENERGY',tgt:0},
+  {sym:'NEE',  name:'NextEra Energy Inc.',           cat:'ENERGY',tgt:0},
+  {sym:'XOM',  name:'Exxon Mobil Corp.',             cat:'ENERGY',tgt:0},
+  {sym:'CVX',  name:'Chevron Corporation',           cat:'ENERGY',tgt:0},
+  {sym:'BP',   name:'BP p.l.c.',                     cat:'ENERGY',tgt:0},
+  {sym:'SEDG', name:'SolarEdge Technologies',        cat:'ENERGY',tgt:0},
+  {sym:'RUN',  name:'Sunrun Inc.',                   cat:'ENERGY',tgt:0},
+  {sym:'BE',   name:'Bloom Energy Corp.',            cat:'ENERGY',tgt:0},
+  // ── วัตถุดิบ ────────────────────────────────────────────────────
+  {sym:'CPER', name:'US Copper Index Fund',          cat:'MATERIAL',tgt:2},
+  {sym:'SLV',  name:'iShares Silver Trust',          cat:'MATERIAL',tgt:2},
+  {sym:'GOLD', name:'Barrick Gold Corp',             cat:'MATERIAL',tgt:1},
+  {sym:'GLD',  name:'SPDR Gold Shares ETF',          cat:'MATERIAL',tgt:0},
+  {sym:'IAU',  name:'iShares Gold Trust',            cat:'MATERIAL',tgt:0},
+  {sym:'NEM',  name:'Newmont Corporation',           cat:'MATERIAL',tgt:0},
+  {sym:'FCX',  name:'Freeport-McMoRan Inc.',         cat:'MATERIAL',tgt:0},
+  {sym:'MP',   name:'MP Materials Corp.',            cat:'MATERIAL',tgt:0},
+  {sym:'VALE', name:'Vale S.A.',                     cat:'MATERIAL',tgt:0},
+  {sym:'BHP',  name:'BHP Group Ltd.',                cat:'MATERIAL',tgt:0},
+  // ── อื่นๆ ────────────────────────────────────────────────────────
+  {sym:'BTC',  name:'Bitcoin',                       cat:'OTHER',tgt:0},
+  {sym:'ETH',  name:'Ethereum',                      cat:'OTHER',tgt:0},
+  {sym:'JNJ',  name:'Johnson & Johnson',             cat:'OTHER',tgt:0},
+  {sym:'PFE',  name:'Pfizer Inc.',                   cat:'OTHER',tgt:0},
+  {sym:'UNH',  name:'UnitedHealth Group',            cat:'OTHER',tgt:0},
+  {sym:'V',    name:'Visa Inc.',                     cat:'OTHER',tgt:0},
+  {sym:'MA',   name:'Mastercard Inc.',               cat:'OTHER',tgt:0},
+  {sym:'JPM',  name:'JPMorgan Chase',                cat:'OTHER',tgt:0},
+  {sym:'BAC',  name:'Bank of America',               cat:'OTHER',tgt:0},
+  {sym:'WMT',  name:'Walmart Inc.',                  cat:'OTHER',tgt:0},
+  {sym:'COST', name:'Costco Wholesale',              cat:'OTHER',tgt:0},
 ];
 const KNOWN=Object.fromEntries(BLUEPRINT.map(b=>[b.sym,b]));
-const sdl=document.getElementById('sdl');
-BLUEPRINT.forEach(b=>{const o=document.createElement('option');o.value=b.sym;o.label=b.name;sdl.appendChild(o);});
+
+/* ── Symbol Picker ──────────────────────────────────────────────── */
+function buildSymPickerBody(filter=''){
+  const body = document.getElementById('sym-picker-body');
+  if(!body) return;
+  const q = filter.toUpperCase().trim();
+  // กรองตาม search
+  const filtered = q
+    ? BLUEPRINT.filter(b=>b.sym.includes(q)||b.name.toUpperCase().includes(q))
+    : BLUEPRINT;
+  // จัดกลุ่มตาม cat
+  const byCat = {};
+  filtered.forEach(b=>{ (byCat[b.cat]||(byCat[b.cat]=[])).push(b); });
+  const order = ['BASE','BRAIN','SEMI','CYBER','ENERGY','MATERIAL','OTHER'];
+  let html = '';
+  order.filter(c=>byCat[c]?.length).forEach(c=>{
+    html += `<div style="padding:5px 12px 2px;font-size:9px;font-weight:700;color:${SEC[c]?.color||'#888'};text-transform:uppercase;letter-spacing:.1em;background:var(--bg3);position:sticky;top:0">${SEC[c]?.label||c}</div>`;
+    byCat[c].forEach(b=>{
+      html += `<div onclick="selectSym('${b.sym}')"
+        style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <div>
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${SEC[c]?.color||'#888'}">${b.sym}</span>
+          <span style="font-size:11px;color:var(--muted2);margin-left:8px">${b.name}</span>
+        </div>
+        ${b.tgt?`<span style="font-size:10px;color:var(--muted);flex-shrink:0">เป้า ${b.tgt}%</span>`:''}
+      </div>`;
+    });
+  });
+  if(!html) html = '<div style="padding:14px 12px;color:var(--muted);font-size:12px;text-align:center">ไม่พบ — กรอก Symbol เองได้เลย</div>';
+  body.innerHTML = html;
+}
+
+function showSymPicker(){
+  const picker = document.getElementById('sym-picker');
+  if(!picker) return;
+  picker.style.display = 'block';
+  buildSymPickerBody(document.getElementById('mi-sym')?.value||'');
+  // ปิดเมื่อคลิกนอก
+  setTimeout(()=>{
+    document.addEventListener('click', closeSymPickerOutside, {once:true, capture:true});
+  }, 100);
+}
+
+function closeSymPickerOutside(e){
+  const picker = document.getElementById('sym-picker');
+  const input  = document.getElementById('mi-sym');
+  if(picker && !picker.contains(e.target) && e.target !== input){
+    picker.style.display = 'none';
+  } else if(picker && picker.style.display !== 'none'){
+    document.addEventListener('click', closeSymPickerOutside, {once:true, capture:true});
+  }
+}
+
+function selectSym(sym){
+  const picker = document.getElementById('sym-picker');
+  if(picker) picker.style.display = 'none';
+  if(sym === 'CUSTOM'){
+    // โหมดกรอกเอง — clear แล้วให้ focus
+    document.getElementById('mi-sym').value = '';
+    document.getElementById('mi-sym').placeholder = 'พิมพ์ Symbol เช่น TSLA, BTC...';
+    document.getElementById('mi-sym').focus();
+    document.getElementById('mi-sh').textContent = '📝 กรอก Symbol เองได้เลย';
+    document.getElementById('mi-sh').className = 'fhint';
+    return;
+  }
+  document.getElementById('mi-sym').value = sym;
+  onSym(sym);
+}
+
+function onSymSearch(v){
+  const picker = document.getElementById('sym-picker');
+  if(picker) {
+    picker.style.display = 'block';
+    buildSymPickerBody(v);
+  }
+  // ถ้าพิมพ์ตรงกับ symbol ในรายการ ให้ autofill ทันที
+  const sym = v.toUpperCase().trim();
+  if(KNOWN[sym]) onSym(sym);
+}
+
 
 const SEC={
   BASE:    {label:'🏛️ ฐาน',          color:'#7ec8e3'},
@@ -1578,6 +1762,16 @@ function om(id,mode,eid=null){
     document.getElementById('mi-total').value=d?.totalBaht||'';
     document.getElementById('mi-cur').value=d?.curPrice||'';
     document.getElementById('mi-tgt').value=d?.tgt||bp?.tgt||0;
+    // Reset price mode — default auto, แต่ถ้า edit และมี curPrice กรอกเองแล้วให้ใช้ manual
+    setTimeout(()=>{
+      if(d?.curPrice && d.curPrice !== d.buyPrice){
+        setCurMode('manual');
+        document.getElementById('mi-cur').value = d.curPrice;
+      } else {
+        setCurMode('auto');
+        if(d?.sym||bp?.sym) fetchCurPrice(d?.sym||bp?.sym);
+      }
+    }, 50);
     document.getElementById('mi-sh').textContent='';
     document.getElementById('mi-ch').textContent=d?.sym&&LIVE[d.sym]?`📡 ราคาสด: ${fU(LIVE[d.sym].price)} (${fP(LIVE[d.sym].chg)})`: '';
     if(d?.sym) onSym(d.sym);
@@ -1626,7 +1820,15 @@ function saveInv(){
   const qty=parseFloat(document.getElementById('mi-qty').value);
   const buyP=parseFloat(document.getElementById('mi-buy').value);
   const totalBaht=parseFloat(document.getElementById('mi-total').value)||(qty*buyP*DB.usdthb);
-  const curPrice=parseFloat(document.getElementById('mi-cur').value)||buyP;
+  const autoWrap = document.getElementById('cur-auto-wrap');
+  const isAuto = autoWrap && autoWrap.style.display !== 'none';
+  let curPrice;
+  if(isAuto){
+    const autoPrice = parseFloat(document.getElementById('mi-ch-txt')?.dataset.price);
+    curPrice = !isNaN(autoPrice) && autoPrice > 0 ? autoPrice : buyP;
+  } else {
+    curPrice = parseFloat(document.getElementById('mi-cur').value) || buyP;
+  }
   const cat=document.getElementById('mi-cat').value;
   const date=document.getElementById('mi-date').value;
   const tgt=parseFloat(document.getElementById('mi-tgt').value)||0;
@@ -1702,13 +1904,94 @@ function saveDiv(){
   else toast('บันทึกปันผลสำเร็จ');
   saveDB();cm('m-div');rScan();rDash();
 }
+function setCurMode(mode){
+  const btnAuto   = document.getElementById('cur-btn-auto');
+  const btnManual = document.getElementById('cur-btn-manual');
+  const autoWrap  = document.getElementById('cur-auto-wrap');
+  const manWrap   = document.getElementById('cur-manual-wrap');
+  if(!btnAuto) return;
+
+  if(mode==='auto'){
+    btnAuto.style.borderColor   = 'var(--b)';
+    btnAuto.style.background    = 'var(--ba)';
+    btnAuto.style.color         = 'var(--b)';
+    btnManual.style.borderColor = 'var(--border)';
+    btnManual.style.background  = 'transparent';
+    btnManual.style.color       = 'var(--muted2)';
+    autoWrap.style.display = 'block';
+    manWrap.style.display  = 'none';
+    // ลอง fetch ราคาถ้า symbol กรอกไว้แล้ว
+    const sym = document.getElementById('mi-sym')?.value?.toUpperCase().trim();
+    if(sym) fetchCurPrice(sym);
+  } else {
+    btnManual.style.borderColor = 'var(--g)';
+    btnManual.style.background  = 'var(--ga)';
+    btnManual.style.color       = 'var(--g)';
+    btnAuto.style.borderColor   = 'var(--border)';
+    btnAuto.style.background    = 'transparent';
+    btnAuto.style.color         = 'var(--muted2)';
+    autoWrap.style.display = 'none';
+    manWrap.style.display  = 'block';
+    // ถ้ามีราคาจาก auto อยู่แล้ว ใส่เข้า manual field
+    const autoTxt = document.getElementById('mi-ch-txt')?.dataset.price;
+    if(autoTxt) document.getElementById('mi-cur').value = autoTxt;
+  }
+}
+
+async function fetchCurPrice(sym){
+  const chTxt = document.getElementById('mi-ch-txt');
+  if(!chTxt) return;
+
+  // ถ้ามีอยู่ใน LIVE cache แล้ว ใช้เลย
+  if(LIVE[sym]?.price){
+    const p = LIVE[sym];
+    chTxt.innerHTML = `<span style="color:var(--g);font-weight:700;font-size:15px">${fU(p.price)}</span>
+      <span class="${p.chg>=0?'pos':'neg'}" style="font-size:12px">${fP(p.chg)}</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:4px">📡 จาก cache</span>`;
+    chTxt.dataset.price = p.price;
+    return;
+  }
+
+  // ดึงใหม่จาก Finnhub
+  chTxt.innerHTML = `<span class="spin" style="width:14px;height:14px;display:inline-block"></span> <span style="color:var(--muted2)">กำลังดึงราคา ${sym}...</span>`;
+  try{
+    const q = await finnhubQuote(sym);
+    LIVE[sym] = {price:q.price, chg:q.chg};
+    chTxt.innerHTML = `<span style="color:var(--g);font-weight:700;font-size:15px">${fU(q.price)}</span>
+      <span class="${q.chg>=0?'pos':'neg'}" style="font-size:12px">${fP(q.chg)}</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:4px">📡 Finnhub · สด</span>`;
+    chTxt.dataset.price = q.price;
+    // อัปเดต curPrice ใน investment ถ้าแก้ไขอยู่
+    if(editId){
+      const inv = DB.investments.find(i=>i.id===editId);
+      if(inv) inv.curPrice = q.price;
+    }
+  }catch(e){
+    chTxt.innerHTML = `<span style="color:var(--r)">❌ ดึงราคาไม่ได้ — ลอง "กรอกเอง" แทน</span>`;
+    chTxt.dataset.price = '';
+  }
+}
+
 function onSym(v){
-  const sym=v.toUpperCase().trim();const bp=KNOWN[sym];
-  const sh=document.getElementById('mi-sh');const ch=document.getElementById('mi-ch');
-  if(bp){document.getElementById('mi-name').value=bp.name;document.getElementById('mi-cat').value=bp.cat;if(!document.getElementById('mi-tgt').value&&bp.tgt)document.getElementById('mi-tgt').value=bp.tgt;sh.textContent=`✓ ${bp.name}`;sh.className='fhint ok';}
-  else{sh.textContent=sym?'📝 สินทรัพย์ใหม่':'';sh.className='fhint';}
-  if(LIVE[sym]?.price){document.getElementById('mi-cur').value=LIVE[sym].price;ch.textContent=`📡 ราคาสด: ${fU(LIVE[sym].price)} (${fP(LIVE[sym].chg)})`;}
-  else ch.textContent='';
+  const sym=v.toUpperCase().trim();
+  const bp=KNOWN[sym];
+  const sh=document.getElementById('mi-sh');
+  if(bp){
+    document.getElementById('mi-name').value=bp.name;
+    document.getElementById('mi-cat').value=bp.cat;
+    if(!document.getElementById('mi-tgt').value&&bp.tgt) document.getElementById('mi-tgt').value=bp.tgt;
+    sh.textContent=`✓ ${bp.name}`;sh.className='fhint ok';
+  }else{sh.textContent=sym?'📝 สินทรัพย์ใหม่':'';sh.className='fhint';}
+
+  // ดึงราคาอัตโนมัติถ้าอยู่ใน auto mode
+  const autoWrap = document.getElementById('cur-auto-wrap');
+  if(autoWrap && autoWrap.style.display !== 'none' && sym){
+    fetchCurPrice(sym);
+  } else if(LIVE[sym]?.price){
+    // manual mode — แค่แสดง hint
+    const ch=document.getElementById('mi-ch');
+    if(ch) ch.textContent=``;
+  }
   calcTotal();
 }
 function calcTotal(){
