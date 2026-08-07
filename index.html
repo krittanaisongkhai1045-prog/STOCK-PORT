@@ -361,7 +361,30 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">จำนวนหุ้น</label><input class="fi" type="number" id="mi-qty" placeholder="0" step="any" oninput="calcTotal()"></div>
-      <div class="fg"><label class="fl">ราคาซื้อ (USD)</label><input class="fi" type="number" id="mi-buy" placeholder="0.00" step="any" oninput="calcTotal()"></div>
+      <div class="fg">
+        <label class="fl">ราคาซื้อ (USD)</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <button type="button" id="buy-btn-live" onclick="setBuyMode('live')"
+            style="flex:1;padding:6px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted2);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+            📡 ราคาตลาดตอนนี้
+          </button>
+          <button type="button" id="buy-btn-manual" onclick="setBuyMode('manual')"
+            style="flex:1;padding:6px;border-radius:7px;border:1px solid var(--g);background:var(--ga);color:var(--g);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+            ✏️ กรอกราคาเอง
+          </button>
+        </div>
+        <!-- Live mode -->
+        <div id="buy-live-wrap" style="display:none">
+          <div id="mi-buy-live" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rads);font-size:13px;color:var(--muted2);min-height:42px;display:flex;align-items:center;gap:8px">
+            <span id="mi-buy-live-txt">พิมพ์ Symbol ด้านบนเพื่อดึงราคาตลาด</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">ใช้ราคาตลาดปัจจุบันเป็นราคาที่ซื้อ</div>
+        </div>
+        <!-- Manual mode (default) -->
+        <div id="buy-manual-wrap">
+          <input class="fi" type="number" id="mi-buy" placeholder="0.00" step="any" oninput="calcTotal()">
+        </div>
+      </div>
     </div>
     <div class="fg"><label class="fl">เงินที่ลงทุน (฿)</label><input class="fi" type="number" id="mi-total" placeholder="คำนวณอัตโนมัติ" step="any"><div class="fhint" id="mi-th"></div></div>
     <div class="fg">
@@ -1759,6 +1782,8 @@ function om(id,mode,eid=null){
     document.getElementById('mi-date').value=d?.date||today();
     document.getElementById('mi-qty').value=d?.qty||'';
     document.getElementById('mi-buy').value=d?.buyPrice||'';
+    // reset buy mode — always manual on edit/new (กรอกราคาซื้อจริงที่ซื้อมา)
+    setTimeout(()=>{ setBuyMode('manual'); }, 30);
     document.getElementById('mi-total').value=d?.totalBaht||'';
     document.getElementById('mi-cur').value=d?.curPrice||'';
     document.getElementById('mi-tgt').value=d?.tgt||bp?.tgt||0;
@@ -1818,7 +1843,15 @@ function saveInv(){
   const sym=document.getElementById('mi-sym').value.toUpperCase().trim();
   const name=document.getElementById('mi-name').value.trim();
   const qty=parseFloat(document.getElementById('mi-qty').value);
-  const buyP=parseFloat(document.getElementById('mi-buy').value);
+  // ราคาซื้อ — live mode หรือ manual
+  const buyLiveWrap=document.getElementById('buy-live-wrap');
+  const isBuyLive=buyLiveWrap&&buyLiveWrap.style.display!=='none';
+  let buyP;
+  if(isBuyLive){
+    buyP=parseFloat(document.getElementById('mi-buy-live-txt')?.dataset.price)||0;
+  }else{
+    buyP=parseFloat(document.getElementById('mi-buy').value)||0;
+  }
   const totalBaht=parseFloat(document.getElementById('mi-total').value)||(qty*buyP*DB.usdthb);
   const autoWrap = document.getElementById('cur-auto-wrap');
   const isAuto = autoWrap && autoWrap.style.display !== 'none';
@@ -1972,6 +2005,49 @@ async function fetchCurPrice(sym){
   }
 }
 
+function setBuyMode(mode){
+  const btnLive   = document.getElementById('buy-btn-live');
+  const btnManual = document.getElementById('buy-btn-manual');
+  const liveWrap  = document.getElementById('buy-live-wrap');
+  const manWrap   = document.getElementById('buy-manual-wrap');
+  if(!btnLive) return;
+  if(mode==='live'){
+    btnLive.style.borderColor='var(--b)';btnLive.style.background='var(--ba)';btnLive.style.color='var(--b)';
+    btnManual.style.borderColor='var(--border)';btnManual.style.background='transparent';btnManual.style.color='var(--muted2)';
+    liveWrap.style.display='block';manWrap.style.display='none';
+    const sym=document.getElementById('mi-sym')?.value?.toUpperCase().trim();
+    if(sym) fetchBuyPrice(sym);
+  }else{
+    btnManual.style.borderColor='var(--g)';btnManual.style.background='var(--ga)';btnManual.style.color='var(--g)';
+    btnLive.style.borderColor='var(--border)';btnLive.style.background='transparent';btnLive.style.color='var(--muted2)';
+    liveWrap.style.display='none';manWrap.style.display='block';
+    const lp=document.getElementById('mi-buy-live-txt')?.dataset.price;
+    if(lp){document.getElementById('mi-buy').value=lp;calcTotal();}
+  }
+}
+
+async function fetchBuyPrice(sym){
+  const el=document.getElementById('mi-buy-live-txt');
+  if(!el) return;
+  if(LIVE[sym]?.price){
+    const p=LIVE[sym];
+    el.innerHTML=`<span style="color:var(--b);font-weight:700;font-size:15px">${fU(p.price)}</span> <span class="${p.chg>=0?'pos':'neg'}" style="font-size:12px">${fP(p.chg)}</span> <span style="font-size:10px;color:var(--muted);margin-left:4px">📡 ราคาตลาดปัจจุบัน</span>`;
+    el.dataset.price=p.price;
+    document.getElementById('mi-buy').value=p.price;calcTotal();return;
+  }
+  el.innerHTML=`<span class="spin" style="width:14px;height:14px;display:inline-block"></span> <span style="color:var(--muted2)">กำลังดึงราคา ${sym}...</span>`;
+  try{
+    const q=await finnhubQuote(sym);
+    LIVE[sym]={price:q.price,chg:q.chg};
+    el.innerHTML=`<span style="color:var(--b);font-weight:700;font-size:15px">${fU(q.price)}</span> <span class="${q.chg>=0?'pos':'neg'}" style="font-size:12px">${fP(q.chg)}</span> <span style="font-size:10px;color:var(--muted);margin-left:4px">📡 Finnhub</span>`;
+    el.dataset.price=q.price;
+    document.getElementById('mi-buy').value=q.price;calcTotal();
+  }catch(e){
+    el.innerHTML=`<span style="color:var(--r)">❌ ดึงไม่ได้ — เปลี่ยนเป็น "กรอกเอง"</span>`;
+    el.dataset.price='';
+  }
+}
+
 function onSym(v){
   const sym=v.toUpperCase().trim();
   const bp=KNOWN[sym];
@@ -1983,15 +2059,16 @@ function onSym(v){
     sh.textContent=`✓ ${bp.name}`;sh.className='fhint ok';
   }else{sh.textContent=sym?'📝 สินทรัพย์ใหม่':'';sh.className='fhint';}
 
-  // ดึงราคาอัตโนมัติถ้าอยู่ใน auto mode
-  const autoWrap = document.getElementById('cur-auto-wrap');
-  if(autoWrap && autoWrap.style.display !== 'none' && sym){
-    fetchCurPrice(sym);
-  } else if(LIVE[sym]?.price){
-    // manual mode — แค่แสดง hint
-    const ch=document.getElementById('mi-ch');
-    if(ch) ch.textContent=``;
-  }
+  if(!sym) return;
+
+  // ดึงราคาปัจจุบันถ้าอยู่ใน auto mode
+  const autoWrap=document.getElementById('cur-auto-wrap');
+  if(autoWrap&&autoWrap.style.display!=='none') fetchCurPrice(sym);
+
+  // ดึงราคาซื้อถ้าอยู่ใน live mode
+  const buyLiveWrap=document.getElementById('buy-live-wrap');
+  if(buyLiveWrap&&buyLiveWrap.style.display!=='none') fetchBuyPrice(sym);
+
   calcTotal();
 }
 function calcTotal(){
