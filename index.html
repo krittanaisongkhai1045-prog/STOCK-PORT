@@ -1442,7 +1442,7 @@ function rScan(){
 
   <!-- SCANNER -->
   <div style="font-weight:800;font-size:15px;margin:14px 0 8px;letter-spacing:-.02em">
-    🔍 สแกนหุ้น <span style="font-size:11px;font-weight:400;color:var(--muted)">— วิเคราะห์จากข้อมูลจริง Finnhub</span>
+    🔍 สแกนหุ้น <span style="font-size:11px;font-weight:400;color:var(--muted)">— วิเคราะห์ด้วย Claude.ai + Web Search</span>
   </div>
   <div class="card" style="border-color:rgba(75,150,255,.25)">
     <div class="ch" style="background:rgba(75,150,255,.05)">
@@ -1464,12 +1464,12 @@ function rScan(){
         <label class="fl">เกณฑ์วิเคราะห์</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           ${[
-            {id:'c-pe',   ico:'💲', l:'P/E ต่ำ (< เฉลี่ย Sector)'},
-            {id:'c-52w',  ico:'📉', l:'ใกล้ 52-week low (< 20%)'},
-            {id:'c-dip',  ico:'📊', l:'ต่ำกว่า 52w High > 15% (Dip)'},
-            {id:'c-div',  ico:'💰', l:'Dividend Yield สูง'},
-            {id:'c-fund', ico:'🏢', l:'พื้นฐานดี (ROE, EPS Growth)'},
-            {id:'c-rec',  ico:'📰', l:'โบรกแนะนำ Buy/Strong Buy'},
+            {id:'c-pe',   ico:'💲', l:'P/E Valuation (ถูกหรือแพง)'},
+            {id:'c-52w',  ico:'📉', l:'ตำแหน่งราคาใน 52-week Range'},
+            {id:'c-dip',  ico:'📊', l:'ปรับฐาน Dip จาก High'},
+            {id:'c-div',  ico:'💰', l:'Dividend Yield'},
+            {id:'c-fund', ico:'🏢', l:'พื้นฐาน (ROE, EPS, Revenue)'},
+            {id:'c-rec',  ico:'📰', l:'Analyst Consensus + ข่าวล่าสุด'},
           ].map(c=>`
           <label style="display:flex;align-items:center;gap:6px;padding:8px 10px;
             background:var(--bg3);border:1px solid var(--border2);border-radius:8px;
@@ -1480,10 +1480,10 @@ function rScan(){
         </div>
       </div>
       <button class="btn btn-b btn-full" onclick="runScan()" id="scan-btn">
-        🔍 สแกนด้วย Finnhub
+        🔍 วิเคราะห์ด้วย Claude AI
       </button>
       <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:7px">
-        วิเคราะห์จากข้อมูลจริง — P/E · 52w · Dividend · ROE · โบรก Consensus
+        Claude AI วิเคราะห์ข้อมูลจริง — P/E · 52w · ROE · Analyst · ข่าว — ผลออกในแอพทันที
       </div>
     </div>
   </div>
@@ -1530,178 +1530,12 @@ function renderDivHistory(){
   }
 }
 
-/* ══ FINNHUB SCANNER ════════════════════════════════════════════════
-   ดึงข้อมูลจริงจาก Finnhub แล้วคำนวณคะแนนในแอพเลย
-   ไม่ต้อง copy prompt ไปไหน
+/* ══ IN-APP CLAUDE SCANNER ══════════════════════════════════════════
+   ใช้ Claude API วิเคราะห์หุ้นในแอพตรงๆ ไม่ต้องออกไปไหน
+   Claude Haiku — เร็ว ถูก เหมาะกับ real-time stock analysis
 ════════════════════════════════════════════════════════════════════ */
-
-// P/E เฉลี่ยตาม Sector สำหรับเปรียบเทียบ
-const SECTOR_PE = {
-  BASE:8, BRAIN:28, SEMI:25, CYBER:35, ENERGY:15, MATERIAL:18, OTHER:20
-};
-
-async function fetchFinnhubMetric(sym){
-  // Basic Financials — P/E, 52w, ROE, dividend yield, EPS growth
-  const url=`${FINNHUB_BASE}/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all&token=${FINNHUB_KEY}`;
-  const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
-  if(!res.ok) throw new Error(`metric HTTP ${res.status}`);
-  return await res.json();
-}
-
-async function fetchFinnhubRec(sym){
-  // Analyst recommendations
-  const url=`${FINNHUB_BASE}/stock/recommendation?symbol=${encodeURIComponent(sym)}&token=${FINNHUB_KEY}`;
-  const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
-  if(!res.ok) return [];
-  const data=await res.json();
-  return Array.isArray(data)?data:[];
-}
-
-async function fetchFinnhubNews(sym){
-  const to=new Date().toISOString().split('T')[0];
-  const from=new Date(Date.now()-7*24*60*60*1000).toISOString().split('T')[0];
-  const url=`${FINNHUB_BASE}/company-news?symbol=${encodeURIComponent(sym)}&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
-  const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
-  if(!res.ok) return [];
-  const data=await res.json();
-  return Array.isArray(data)?data.slice(0,5):[];
-}
-
-function scoreSym(sym, quote, metric, recs, news, criteria){
-  const m = metric?.metric || {};
-  const inv = DB.investments.find(i=>i.sym===sym);
-  const sector = inv?.cat || 'OTHER';
-  const avgPE = SECTOR_PE[sector] || 20;
-
-  let totalWeight = 0;
-  let earnedWeight = 0;
-  const details = [];
-
-  // ── เกณฑ์ 1: P/E ต่ำ ──
-  if(criteria.pe){
-    totalWeight += 20;
-    const pe = m['peNormalizedAnnual'] || m['peTTM'] || null;
-    if(pe && pe > 0){
-      let pts=0;
-      if(pe < avgPE*0.7)        { pts=20; details.push({ico:'💲',txt:`P/E ${fN(pe,1)} — ถูกมาก (เฉลี่ย Sector ${avgPE}x)`,ok:true}); }
-      else if(pe < avgPE)       { pts=14; details.push({ico:'💲',txt:`P/E ${fN(pe,1)} — ถูกกว่าค่าเฉลี่ย Sector`,ok:true}); }
-      else if(pe < avgPE*1.3)   { pts=7;  details.push({ico:'💲',txt:`P/E ${fN(pe,1)} — ใกล้ค่าเฉลี่ย`,ok:false}); }
-      else                       { pts=0;  details.push({ico:'💲',txt:`P/E ${fN(pe,1)} — แพงกว่าค่าเฉลี่ย Sector (${avgPE}x)`,ok:false}); }
-      earnedWeight += pts;
-    } else {
-      details.push({ico:'💲',txt:'P/E — ไม่มีข้อมูล',ok:null});
-    }
-  }
-
-  // ── เกณฑ์ 2: ใกล้ 52-week low ──
-  if(criteria.w52){
-    totalWeight += 15;
-    const low  = m['52WeekLow']  || m['52WeekLowDate']  && null;
-    const high = m['52WeekHigh'] || null;
-    const cur  = quote?.price || inv?.curPrice;
-    if(low && high && cur){
-      const rangePct = high>low ? (cur-low)/(high-low)*100 : 50;
-      let pts=0;
-      if(rangePct < 15)       { pts=15; details.push({ico:'📉',txt:`ใกล้ 52w Low มาก (${fN(rangePct,0)}% จาก low)`,ok:true}); }
-      else if(rangePct < 30)  { pts=10; details.push({ico:'📉',txt:`ค่อนข้างใกล้ 52w Low (${fN(rangePct,0)}% จาก low)`,ok:true}); }
-      else if(rangePct < 55)  { pts=5;  details.push({ico:'📉',txt:`ราคากลางช่วง 52 สัปดาห์ (${fN(rangePct,0)}% จาก low)`,ok:false}); }
-      else                     { pts=0;  details.push({ico:'📉',txt:`ใกล้ 52w High (${fN(100-rangePct,0)}% จาก high)`,ok:false}); }
-      earnedWeight += pts;
-    } else {
-      details.push({ico:'📉',txt:'52w Range — ไม่มีข้อมูล',ok:null});
-    }
-  }
-
-  // ── เกณฑ์ 3: ปรับฐาน Dip จาก 52w High ──
-  if(criteria.dip){
-    totalWeight += 15;
-    const high = m['52WeekHigh'] || null;
-    const cur  = quote?.price || inv?.curPrice;
-    if(high && cur){
-      const dropPct = (high-cur)/high*100;
-      let pts=0;
-      if(dropPct > 30)        { pts=15; details.push({ico:'📊',txt:`Dip ${fN(dropPct,1)}% จาก 52w High — โอกาสดีมาก`,ok:true}); }
-      else if(dropPct > 15)   { pts=10; details.push({ico:'📊',txt:`Dip ${fN(dropPct,1)}% จาก 52w High`,ok:true}); }
-      else if(dropPct > 5)    { pts=5;  details.push({ico:'📊',txt:`ลงจาก High ${fN(dropPct,1)}% — เล็กน้อย`,ok:false}); }
-      else                     { pts=0;  details.push({ico:'📊',txt:`ใกล้ 52w High — ไม่ใช่จังหวะ Dip`,ok:false}); }
-      earnedWeight += pts;
-    } else {
-      details.push({ico:'📊',txt:'Dip — ไม่มีข้อมูล',ok:null});
-    }
-  }
-
-  // ── เกณฑ์ 4: Dividend Yield สูง ──
-  if(criteria.div){
-    totalWeight += 15;
-    const yield_ = m['dividendYieldIndicatedAnnual'] || m['currentDividendYieldTTM'] || 0;
-    let pts=0;
-    if(yield_ > 4)       { pts=15; details.push({ico:'💰',txt:`Dividend Yield ${fN(yield_,2)}% — สูงมาก`,ok:true}); }
-    else if(yield_ > 2)  { pts=10; details.push({ico:'💰',txt:`Dividend Yield ${fN(yield_,2)}% — ดี`,ok:true}); }
-    else if(yield_ > 0.5){ pts=5;  details.push({ico:'💰',txt:`Dividend Yield ${fN(yield_,2)}% — น้อย`,ok:false}); }
-    else                  { pts=0;  details.push({ico:'💰',txt:'ไม่จ่ายปันผล',ok:false}); }
-    earnedWeight += pts;
-  }
-
-  // ── เกณฑ์ 5: พื้นฐานดี (ROE + EPS Growth) ──
-  if(criteria.fund){
-    totalWeight += 20;
-    const roe     = m['roeTTM'] || m['roeRfy'] || null;
-    const epsGrowth = m['epsGrowth3Y'] || m['epsGrowthTTMYoy'] || null;
-    const margin  = m['netProfitMarginTTM'] || null;
-    let pts=0; const fundPts=[];
-    if(roe !== null){
-      if(roe > 20)      { pts+=8; fundPts.push(`ROE ${fN(roe,1)}% ดีมาก`); }
-      else if(roe > 10) { pts+=5; fundPts.push(`ROE ${fN(roe,1)}%`); }
-      else              { fundPts.push(`ROE ${fN(roe,1)}% ต่ำ`); }
-    }
-    if(epsGrowth !== null){
-      if(epsGrowth > 15)     { pts+=7; fundPts.push(`EPS Growth ${fN(epsGrowth,1)}% ดีมาก`); }
-      else if(epsGrowth > 5) { pts+=4; fundPts.push(`EPS Growth ${fN(epsGrowth,1)}%`); }
-      else if(epsGrowth > 0) { pts+=2; fundPts.push(`EPS Growth ${fN(epsGrowth,1)}% ช้า`); }
-      else                   { fundPts.push(`EPS Growth ${fN(epsGrowth,1)}% ติดลบ`); }
-    }
-    if(margin !== null){
-      if(margin > 20)     { pts+=5; fundPts.push(`Margin ${fN(margin,1)}%`); }
-      else if(margin > 8) { pts+=3; fundPts.push(`Margin ${fN(margin,1)}%`); }
-    }
-    earnedWeight += Math.min(pts, 20);
-    if(fundPts.length) details.push({ico:'🏢',txt:fundPts.join(' · '),ok:pts>=10});
-    else details.push({ico:'🏢',txt:'พื้นฐาน — ไม่มีข้อมูล',ok:null});
-  }
-
-  // ── เกณฑ์ 6: โบรกแนะนำ ──
-  if(criteria.rec){
-    totalWeight += 15;
-    if(recs && recs.length > 0){
-      const latest = recs[0];
-      const buy      = (latest.strongBuy||0) + (latest.buy||0);
-      const hold     = latest.hold || 0;
-      const sell     = (latest.sell||0) + (latest.strongSell||0);
-      const total    = buy + hold + sell || 1;
-      const buyPct   = buy/total*100;
-      let pts=0;
-      if(buyPct > 70)      { pts=15; details.push({ico:'📰',txt:`โบรก Buy ${fN(buyPct,0)}% (${buy}/${total})`,ok:true}); }
-      else if(buyPct > 50) { pts=10; details.push({ico:'📰',txt:`โบรก Buy ${fN(buyPct,0)}% (${buy}/${total})`,ok:true}); }
-      else if(buyPct > 30) { pts=5;  details.push({ico:'📰',txt:`โบรก Buy ${fN(buyPct,0)}% — Hold ${fN(hold/total*100,0)}%`,ok:false}); }
-      else                  { pts=0;  details.push({ico:'📰',txt:`โบรกไม่แนะนำ Buy — Sell ${fN(sell/total*100,0)}%`,ok:false}); }
-      earnedWeight += pts;
-    } else {
-      details.push({ico:'📰',txt:'Analyst Consensus — ไม่มีข้อมูล',ok:null});
-    }
-  }
-
-  // คำนวณคะแนนสุดท้าย
-  const score = totalWeight > 0 ? Math.round(earnedWeight/totalWeight*100) : 0;
-
-  // ข่าวล่าสุด
-  const newsSnip = news.slice(0,3).map(n=>n.headline).filter(Boolean);
-
-  return { sym, score, details, newsSnip,
-    price: quote?.price || inv?.curPrice || 0,
-    chg:   quote?.chg   || 0,
-    metric: m,
-  };
-}
+const CLAUDE_KEY = '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';
+const CLAUDE_MODEL = 'claude-haiku-4-5';
 
 async function runScan(){
   const btn = document.getElementById('scan-btn');
@@ -1717,118 +1551,220 @@ async function runScan(){
     if(!syms.length){ toast('ยังไม่มีสินทรัพย์ในพอร์ต',false); return; }
   }
 
-  const criteria = {
-    pe:   document.getElementById('c-pe')?.checked,
-    w52:  document.getElementById('c-52w')?.checked,
-    dip:  document.getElementById('c-dip')?.checked,
-    div:  document.getElementById('c-div')?.checked,
-    fund: document.getElementById('c-fund')?.checked,
-    rec:  document.getElementById('c-rec')?.checked,
-  };
+  const criteria = [];
+  if(document.getElementById('c-pe')?.checked)   criteria.push('P/E Valuation เทียบค่าเฉลี่ย Sector และ 5 ปี');
+  if(document.getElementById('c-52w')?.checked)  criteria.push('ตำแหน่งราคาใน 52-week Range (ใกล้ Low = ดี)');
+  if(document.getElementById('c-dip')?.checked)  criteria.push('ปรับฐาน Dip จาก 52w High (≥15% = ดี)');
+  if(document.getElementById('c-div')?.checked)  criteria.push('Dividend Yield เทียบค่าเฉลี่ย Sector');
+  if(document.getElementById('c-fund')?.checked) criteria.push('พื้นฐาน: ROE, EPS Growth, Revenue Growth, Free Cash Flow, Net Margin');
+  if(document.getElementById('c-rec')?.checked)  criteria.push('Analyst Consensus (% Buy), Price Target Upside, ข่าวล่าสุด');
+
+  // ข้อมูลพอร์ตจริง
+  const portCtx = syms.map(s => {
+    const inv = DB.investments.find(i=>i.sym===s);
+    const lp  = LIVE[s];
+    if(inv){
+      const fx=DB.usdthb||35;
+      const curV=inv.qty*(inv.curPrice||inv.buyPrice)*fx;
+      const cost=inv.totalBaht||(inv.qty*inv.buyPrice*fx);
+      const pnl=cost>0?((curV-cost)/cost*100).toFixed(1):'0';
+      return `${s}: ถือ ${fN(inv.qty,inv.qty<1?4:2)} หุ้น | ซื้อที่ ${fU(inv.buyPrice)} | ราคาล่าสุด ${lp?fU(lp.price):'?'} | P&L ${pnl}% | เป้าหมาย ${inv.tgt||0}%`;
+    }
+    return `${s}: ${lp?`ราคา ${fU(lp.price)}`:'ค้นหาราคา'}`;
+  }).join('\n');
+
+  const prompt = `คุณคือผู้เชี่ยวชาญการลงทุนหุ้นสหรัฐ ใช้ความรู้และข้อมูลล่าสุดที่มี วิเคราะห์หุ้นต่อไปนี้
+
+ข้อมูลพอร์ตปัจจุบัน (USD/THB ${fN(DB.usdthb,2)}):
+${portCtx}
+
+เกณฑ์การให้คะแนน (แต่ละข้อมีน้ำหนักเท่ากัน รวม 100%):
+${criteria.map((c,i)=>`${i+1}. ${c}`).join('\n')}
+
+ให้คะแนน 0–100 ต่อหุ้น เรียงจากมากไปน้อย ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น:
+[{
+  "sym": "AAPL",
+  "score": 72,
+  "verdict": "รอดูก่อน",
+  "action": "ถือ / รอ Dip เพิ่ม",
+  "price": 195.5,
+  "pe": 28.5,
+  "w52_low": 164.0,
+  "w52_high": 199.6,
+  "div_yield": 0.55,
+  "roe": 147.0,
+  "analyst_buy_pct": 68,
+  "strengths": ["EPS growth แข็งแกร่ง", "Cash flow สูงมาก"],
+  "risks": ["P/E แพงกว่าค่าเฉลี่ย", "ใกล้ 52w High"],
+  "news": "สรุปข่าวสำคัญล่าสุด 1-2 ประโยค"
+}]`;
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> กำลังดึงข้อมูล Finnhub...';
-  out.innerHTML = `<div style="background:var(--bg1);border:1px solid var(--border);border-radius:var(--rad);padding:20px;text-align:center;color:var(--muted);font-size:12px">
-    <div class="spin" style="width:20px;height:20px;margin:0 auto 10px"></div>
-    กำลังดึงข้อมูลจริงจาก Finnhub — ${syms.length} หุ้น<br>
-    <span style="font-size:10px;color:var(--muted)">อาจใช้เวลา ${Math.ceil(syms.length*0.5)} – ${syms.length*2} วินาที</span>
+  btn.innerHTML = '<span class="spin"></span> กำลังวิเคราะห์...';
+  out.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--muted)">
+    <div class="spin" style="width:24px;height:24px;margin:0 auto 12px"></div>
+    <div style="font-size:13px">Claude กำลังวิเคราะห์ <b style="color:var(--b)">${syms.join(', ')}</b></div>
+    <div style="font-size:11px;margin-top:6px;color:var(--muted)">อาจใช้เวลา 5–15 วินาที</div>
   </div>`;
 
-  const results = [];
-  let done = 0;
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
 
-  for(const sym of syms){
-    try{
-      // อัปเดต progress
-      out.querySelector('div').innerHTML = `
-        <div class="spin" style="width:20px;height:20px;margin:0 auto 10px"></div>
-        <b style="color:var(--b)">${sym}</b> — กำลังดึงข้อมูล... (${done}/${syms.length})`;
-
-      // ดึงข้อมูลพร้อมกัน 3 endpoint
-      const [metricData, recsData, newsData] = await Promise.allSettled([
-        fetchFinnhubMetric(sym),
-        fetchFinnhubRec(sym),
-        fetchFinnhubNews(sym),
-      ]);
-
-      const metric = metricData.status==='fulfilled' ? metricData.value : {};
-      const recs   = recsData.status==='fulfilled'   ? recsData.value  : [];
-      const news   = newsData.status==='fulfilled'   ? newsData.value  : [];
-      const quote  = LIVE[sym] || null;
-
-      results.push(scoreSym(sym, quote, metric, recs, news, criteria));
-      done++;
-
-      // หน่วงเพื่อ rate limit
-      if(done < syms.length) await new Promise(r=>setTimeout(r,350));
-
-    } catch(e){
-      console.error(sym, e);
-      results.push({ sym, score:0, details:[{ico:'❌',txt:`ดึงข้อมูลไม่ได้: ${e.message}`,ok:false}], newsSnip:[], price:0, chg:0, metric:{} });
-      done++;
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
     }
+
+    const data = await res.json();
+    let raw = data.content?.[0]?.text || '[]';
+    raw = raw.replace(/```json|```/g,'').trim();
+    // หา JSON array ใน response
+    const match = raw.match(/\[[\s\S]*\]/);
+    if(!match) throw new Error('ไม่พบ JSON ใน response');
+    const results = JSON.parse(match[0]);
+
+    renderScanResults(results, syms.length);
+
+  }catch(e){
+    console.error('Claude scan error:', e);
+    out.innerHTML = `<div class="card" style="border-color:rgba(255,79,106,.3);padding:16px">
+      <div style="color:var(--r);font-weight:700;margin-bottom:8px">❌ วิเคราะห์ไม่สำเร็จ</div>
+      <div style="font-size:12px;color:var(--muted2)">${e.message}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">ตรวจสอบ: API Key ถูกต้อง / มีเครดิต / internet ปกติ</div>
+    </div>`;
   }
 
-  // เรียงคะแนนสูงไปต่ำ
-  results.sort((a,b) => b.score - a.score);
+  btn.disabled = false;
+  btn.innerHTML = '🔍 วิเคราะห์ด้วย Claude AI';
+}
+
+function renderScanResults(results, total){
+  const out = document.getElementById('scan-out');
+  if(!results?.length){
+    out.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">ไม่ได้รับผลการวิเคราะห์</div>';
+    return;
+  }
+
+  const sorted = [...results].sort((a,b)=>b.score-a.score);
+  const time   = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
 
   out.innerHTML = `
-  <div style="font-weight:700;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-    <span>📊 ผลการสแกน ${results.length} ตัว</span>
-    <span style="font-size:10px;color:var(--muted);font-weight:400">ข้อมูลจาก Finnhub · ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="font-weight:700;font-size:13px">📊 ผลวิเคราะห์ ${sorted.length} หุ้น</div>
+    <div style="font-size:10px;color:var(--muted)">Claude AI · ${time}</div>
   </div>
-  ${results.map(r=>{
-    const col = r.score>=70?'var(--g)':r.score>=45?'var(--y)':'var(--r)';
-    const verdict = r.score>=70?'🟢 น่าซื้อ':r.score>=45?'🟡 รอดูก่อน':'🔴 ยังไม่น่าซื้อ';
-    const action  = r.score>=70?'ซื้อได้':r.score>=45?'รอ Dip เพิ่ม':'ถือ / หลีกเลี่ยง';
-    return`<div class="card" style="border-color:${col}33;margin-bottom:10px">
+
+  ${sorted.map(r=>{
+    const score = r.score||0;
+    const col   = score>=70?'var(--g)':score>=45?'var(--y)':'var(--r)';
+    const emoji = score>=70?'🟢':score>=45?'🟡':'🔴';
+    const inv   = DB.investments.find(i=>i.sym===r.sym);
+    const lp    = LIVE[r.sym];
+    const curPx = r.price || lp?.price || inv?.curPrice || 0;
+
+    // คำนวณ 52w position
+    const w52pct = (r.w52_low&&r.w52_high&&curPx)
+      ? Math.round((curPx-r.w52_low)/(r.w52_high-r.w52_low)*100) : null;
+    const dipPct = (r.w52_high&&curPx)
+      ? ((r.w52_high-curPx)/r.w52_high*100).toFixed(1) : null;
+
+    return`<div class="card" style="border-color:${col}33;margin-bottom:10px;overflow:visible">
       <!-- Header -->
-      <div style="padding:12px 14px;border-bottom:1px solid ${col}18;display:flex;justify-content:space-between;align-items:center">
+      <div style="padding:12px 14px 10px;border-bottom:1px solid ${col}18;display:flex;justify-content:space-between;align-items:center;background:${col}06;border-radius:var(--rad) var(--rad) 0 0">
         <div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="mono" style="font-weight:800;font-size:16px;color:${col}">${r.sym}</span>
-            <span class="tag" style="background:${col}18;color:${col};border-color:${col}33">${verdict}</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:900;font-size:18px;color:${col}">${r.sym}</span>
+            <span class="tag" style="background:${col}18;color:${col};border-color:${col}33">${emoji} ${r.verdict||''}</span>
           </div>
-          ${r.price?`<div style="font-size:11px;color:var(--muted2);margin-top:2px">${fU(r.price)} <span class="${r.chg>=0?'pos':'neg'}">${fP(r.chg)}</span></div>`:''}
+          ${curPx?`<div style="font-size:12px;color:var(--muted2);margin-top:3px">
+            ${fU(curPx)}
+            ${lp?.chg!=null?`<span class="${lp.chg>=0?'pos':'neg'}"> ${fP(lp.chg)}</span>`:''}
+          </div>`:''}
         </div>
         <div style="text-align:right">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:900;color:${col};line-height:1">${r.score}</div>
-          <div style="font-size:9px;color:var(--muted)">/ 100</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:900;color:${col};line-height:1">${score}</div>
+          <div style="font-size:9px;color:var(--muted)">/ 100 คะแนน</div>
         </div>
       </div>
-      <!-- Score bar -->
-      <div style="padding:8px 14px 0">
-        <div class="pbar-w" style="height:6px">
-          <div class="pbar" style="width:${r.score}%;background:linear-gradient(90deg,${col}88,${col})"></div>
+
+      <div style="padding:10px 14px">
+        <!-- Score bar -->
+        <div class="pbar-w" style="height:7px;margin-bottom:10px">
+          <div class="pbar" style="width:${score}%;background:linear-gradient(90deg,${col}88,${col})"></div>
         </div>
-      </div>
-      <!-- Action pill -->
-      <div style="margin:8px 14px;padding:7px 11px;background:${col}12;border-radius:8px;font-size:12px;font-weight:700;color:${col}">
-        📌 ${action}
-      </div>
-      <!-- Detail criteria -->
-      <div style="padding:0 14px 10px">
-        ${r.details.map(d=>`
-          <div style="display:flex;align-items:flex-start;gap:7px;padding:4px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:13px;flex-shrink:0">${d.ico}</span>
-            <span style="font-size:11px;color:${d.ok===true?'var(--text)':d.ok===false?'var(--muted)':'var(--muted)'};flex:1">${d.txt}</span>
-            <span style="font-size:12px;flex-shrink:0">${d.ok===true?'✅':d.ok===false?'❌':'—'}</span>
+
+        <!-- Action -->
+        <div style="padding:7px 11px;background:${col}12;border-radius:8px;font-size:12px;font-weight:700;color:${col};margin-bottom:10px">
+          📌 ${r.action||'—'}
+        </div>
+
+        <!-- Key Metrics -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          ${[
+            {l:'P/E', v:r.pe?fN(r.pe,1):'—', ok:r.pe&&r.pe<25},
+            {l:'Div Yield', v:r.div_yield?`${fN(r.div_yield,2)}%`:'—', ok:r.div_yield&&r.div_yield>1.5},
+            {l:'ROE', v:r.roe?`${fN(r.roe,1)}%`:'—', ok:r.roe&&r.roe>15},
+            {l:'52w Low', v:r.w52_low?fU(r.w52_low):'—', ok:null},
+            {l:'52w High', v:r.w52_high?fU(r.w52_high):'—', ok:null},
+            {l:'Dip', v:dipPct?`${dipPct}%`:'—', ok:dipPct&&dipPct>15},
+          ].map(m=>`<div style="background:var(--bg3);border-radius:7px;padding:6px 8px;text-align:center">
+            <div style="font-size:9px;color:var(--muted);margin-bottom:2px">${m.l}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${m.ok===true?'var(--g)':m.ok===false?'var(--r)':'var(--text)'}">${m.v}</div>
           </div>`).join('')}
+        </div>
+
+        <!-- Analyst -->
+        ${r.analyst_buy_pct!=null?`<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
+            <span>📰 Analyst Consensus</span>
+            <span style="color:${r.analyst_buy_pct>=60?'var(--g)':r.analyst_buy_pct>=40?'var(--y)':'var(--r)'};font-weight:700">${r.analyst_buy_pct}% Buy</span>
+          </div>
+          <div class="pbar-w" style="height:5px">
+            <div class="pbar" style="width:${r.analyst_buy_pct}%;background:${r.analyst_buy_pct>=60?'var(--g)':r.analyst_buy_pct>=40?'var(--y)':'var(--r)'}"></div>
+          </div>
+        </div>`:''}
+
+        <!-- Strengths -->
+        ${r.strengths?.length?`<div style="margin-bottom:6px">
+          <div style="font-size:9px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">✅ จุดแข็ง</div>
+          ${r.strengths.map(s=>`<div style="font-size:11px;color:var(--text);padding:2px 0;border-bottom:1px solid var(--border)">• ${s}</div>`).join('')}
+        </div>`:''}
+
+        <!-- Risks -->
+        ${r.risks?.length?`<div style="margin-bottom:6px">
+          <div style="font-size:9px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">⚠️ ความเสี่ยง</div>
+          ${r.risks.map(s=>`<div style="font-size:11px;color:var(--muted2);padding:2px 0;border-bottom:1px solid var(--border)">• ${s}</div>`).join('')}
+        </div>`:''}
+
+        <!-- News -->
+        ${r.news?`<div style="padding:7px 10px;background:var(--bg3);border-radius:7px;font-size:11px;color:var(--muted2);margin-top:4px">
+          📰 ${r.news}
+        </div>`:''}
       </div>
-      <!-- News -->
-      ${r.newsSnip.length?`
-      <div style="padding:0 14px 10px">
-        <div style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px">📰 ข่าว 7 วันล่าสุด</div>
-        ${r.newsSnip.map(h=>`<div style="font-size:10px;color:var(--muted);padding:2px 0;border-bottom:1px solid var(--border)">• ${h.slice(0,90)}${h.length>90?'...':''}</div>`).join('')}
-      </div>`:'' }
     </div>`;
   }).join('')}
-  <div style="font-size:10px;color:var(--muted);text-align:center;padding:8px 0">
-    ⚠️ ข้อมูลจาก Finnhub API · ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่คำแนะนำลงทุน
-  </div>`;
 
-  btn.disabled = false;
-  btn.innerHTML = '🔍 สแกนด้วย Finnhub';
+  <!-- Summary -->
+  <div style="padding:12px 14px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--rad);margin-top:4px;font-size:11px;color:var(--muted2)">
+    <b style="color:var(--g)">🏆 สรุป:</b>
+    <span style="color:var(--text)"> ${sorted[0]?.sym} </span>
+    ได้คะแนนสูงสุด <b style="color:${sorted[0]?.score>=70?'var(--g)':sorted[0]?.score>=45?'var(--y)':'var(--r)'};">${sorted[0]?.score}/100</b>
+    — ${sorted[0]?.action||''}
+    <div style="margin-top:5px;color:var(--muted);font-size:10px">⚠️ ข้อมูลนี้เป็นการวิเคราะห์จาก AI ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่คำแนะนำลงทุน</div>
+  </div>`;
 }
 
 /* ══ MODAL HELPERS ══════════════════════════════════════════════════ */
