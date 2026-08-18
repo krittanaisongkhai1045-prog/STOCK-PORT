@@ -52,7 +52,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0}
 @keyframes sp{to{transform:rotate(360deg)}}
 .pricebar{display:flex;gap:7px;overflow-x:auto;padding:6px 12px;
-  border-bottom:1px solid var(--border);background:var(--bg1);scrollbar-width:none}
+  border-bottom:1px solid var(--border);background:var(--bg1);scrollbar-width:none;
+  max-width:100%;box-sizing:border-box}
 .pricebar::-webkit-scrollbar{display:none}
 .pchip{display:flex;flex-direction:column;align-items:center;background:var(--bg2);
   border:1px solid var(--border);border-radius:8px;padding:5px 10px;flex-shrink:0;min-width:66px}
@@ -199,9 +200,11 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   .sb-section{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;
     padding:14px 14px 4px;font-weight:700}
   .sb-prices{margin:8px 8px 0;padding:10px 11px;background:var(--bg2);
-    border:1px solid var(--border);border-radius:10px}
+    border:1px solid var(--border);border-radius:10px;overflow:hidden}
   .sb-prow{display:flex;justify-content:space-between;align-items:center;
-    padding:3px 0;border-bottom:1px solid var(--border)}
+    padding:3px 0;border-bottom:1px solid var(--border);min-width:0;overflow:hidden}
+.sb-psym{font-weight:700;color:var(--muted2);font-size:10px;flex-shrink:0}
+.sb-pval-wrap{text-align:right;flex-shrink:0}
   .sb-prow:last-child{border-bottom:none}
   .sb-psym{font-weight:700;color:var(--muted2);font-size:10px}
   .sb-pval{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px}
@@ -361,8 +364,9 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
     <div class="spin" id="sb-spin" style="display:none"></div>
     <span id="sb-stxt">—</span>
   </div>
-  <div style="padding:8px 8px 0">
+  <div style="padding:8px 8px 0;display:flex;flex-direction:column;gap:5px">
     <button class="btn btn-ghost btn-full btn-sm" onclick="fetchPrices()" style="font-size:11px">🔄 รีเฟรชราคา</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="forceSyncFromCloud()" style="font-size:11px;color:var(--b)">☁️ โหลดข้อมูลจาก Cloud</button>
   </div>
   <div style="margin-top:auto;padding:8px 8px 0;border-top:1px solid var(--border)">
     <div id="sb-user-area" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:10px;cursor:pointer" onclick="confirmSignOut()" title="ออกจากระบบ">
@@ -1022,6 +1026,22 @@ function setSyncStatus(s){
 }
 
 /* ══ CLOUD SYNC (Supabase Firestore-like) ════════════════════════════ */
+async function forceSyncFromCloud(){
+  if(!currentUser){ toast('กรุณา Login ก่อน',false); return; }
+  setSyncStatus('ing');
+  toast('⏳ กำลังโหลดข้อมูลจาก Cloud...');
+  const ok = await loadFromCloud();
+  if(ok){
+    setSyncStatus('ok');
+    toast('✅ โหลดข้อมูลจาก Cloud สำเร็จ');
+    const cur=document.querySelector('.nb.active,.sb-btn.active')?.dataset.p||'dash';
+    go(cur);
+  } else {
+    setSyncStatus('err');
+    toast('❌ ไม่พบข้อมูลใน Cloud หรือ connection error',false);
+  }
+}
+
 async function syncToCloud(){
   if(!currentUser||isSyncing) return;
   isSyncing = true;
@@ -1329,7 +1349,7 @@ function rDash(){
       <span class="ct" style="color:var(--b)">📈 พอร์ตหุ้น — สัดส่วน Sector</span>
       <span class="tag tb">${inv.count} ตัว</span>
     </div>
-    <div class="cb" id="d-pie-wrap" style="padding:14px"></div>
+    <div class="cb" id="d-pie-wrap" style="padding:14px;overflow:hidden"></div>
   </div>
 
   <!-- Chart 2: เงินสำรอง -->
@@ -1382,7 +1402,7 @@ function renderDashCharts(inv,res,div,debt,assets,netWorth){
   const wrap=document.getElementById('d-pie-wrap');
   destroyChart('pie');
   if(sk.length){
-    wrap.innerHTML=`<div style="height:210px;position:relative"><canvas id="d-pie-c"></canvas></div>
+    wrap.innerHTML=`<div style="height:200px;max-height:200px;position:relative;overflow:hidden"><canvas id="d-pie-c"></canvas></div>
     <div style="text-align:center;margin:8px 0 4px">
       <span class="mono ${inv.pnl>=0?'pos':'neg'}" style="font-size:13px;font-weight:700">${inv.pnl>=0?'+':''}${fB(inv.pnl)} (${fP(inv.pnlP)})</span>
       <div style="font-size:9px;color:var(--muted);margin-top:1px">กำไร/ขาดทุน vs ต้นทุน ${fB(inv.cost)}</div>
@@ -2779,6 +2799,11 @@ function initDesktop(){
 }
 
 async function bootApp(){
+  // ล้าง access_token ออกจาก URL หลัง OAuth redirect
+  if(window.location.hash && window.location.hash.includes('access_token')){
+    history.replaceState(null,'',window.location.pathname+window.location.search);
+  }
+
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
 
