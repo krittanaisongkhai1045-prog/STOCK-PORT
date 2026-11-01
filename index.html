@@ -100,7 +100,7 @@ main{flex:1;position:relative;overflow:hidden}
 .big{font-size:40px;font-weight:800;letter-spacing:-.035em;margin:6px 0 10px;line-height:1.05}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(255,255,255,.12)}
 .chip.up{color:#6df0b4;background:rgba(52,211,153,.15)}.chip.down{color:#ff8a9b;background:rgba(255,107,122,.16)}
-.amt{transition:filter .4s var(--ease)}body.hide .amt{filter:blur(9px);user-select:none}
+.amt{transition:filter .4s var(--ease)}body.hide .amt{user-select:none}
 .sub2,.meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 14px;font-size:12px;color:rgba(255,255,255,.68);margin-top:12px}
 .meta .pos{color:#6df0b4!important}.meta .neg{color:#ff8a9b!important}
 
@@ -441,9 +441,10 @@ function fin() {
 
 /* ---------- formatting ---------- */
 const nf = (v, d = 2) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const thb = (v, d = 2) => '฿' + nf(v, d), usd = v => '$' + nf(v, 2);
-const mu = (u, d = 2) => S.cur === 'THB' ? thb(u * FX, d) : '$' + nf(u, d);         // ค่าตั้งต้นเป็น USD
-const mt = (t, d = 2) => S.cur === 'THB' ? thb(t, d) : '$' + nf(t / FX, d);          // ค่าตั้งต้นเป็น THB
+const MASK = '****';
+const thb = (v, d = 2) => '฿' + (S.hide ? MASK : nf(v, d)), usd = v => '$' + (S.hide ? MASK : nf(v, 2));
+const mu = (u, d = 2) => S.cur === 'THB' ? thb(u * FX, d) : usd(u);         // ค่าตั้งต้นเป็น USD
+const mt = (t, d = 2) => S.cur === 'THB' ? thb(t, d) : usd(t / FX);          // ค่าตั้งต้นเป็น THB
 const sg = (f, v) => (v < 0 ? '−' : '+') + f(Math.abs(v));
 const pct = (v, d = 1) => nf(v * 100, d) + '%';
 const dateTh = s => new Date(s + 'T00:00:00').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -451,7 +452,7 @@ const mark = s => s.replace('.', '').slice(0, 4);
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 function fmtK(k, v) {
   switch (k) {
-    case 'mu': return mu(v); case 'mt': return mt(v); case 'smu': return sg(x => mu(x), v); case 'smt': return sg(x => mt(x), v);
+    case 'mu': return mu(v); case 'mt': return mt(v); case 'smu': case 'smt': return S.hide ? MASK : sg(x => (k === 'smu' ? mu(x) : mt(x)), v);
     case 'thb': return thb(v); case 'usd': return usd(v); case 'pct': return pct(v); case 'pct0': return pct(v, 0);
     case 'spct': return sg(x => pct(x, 2), v); case 'int': return String(Math.round(v)); case 'fx': return nf(v, 2); case 'd1': return nf(v, 1);
     default: return String(v);
@@ -985,7 +986,7 @@ $('#nav').addEventListener('click', e => {
 $('#btn-help').addEventListener('click', () => openGuide(S.tab === 'portfolio' && S.pseg === 'rebalance' ? 'reb' : 'start'));
 $('#btn-cur').addEventListener('click', () => { S.cur = S.cur === 'THB' ? 'USD' : 'THB'; store.set('cur', S.cur); render('n'); toast('แสดงเป็น ' + S.cur); });
 const applyHide = () => { document.body.classList.toggle('hide', S.hide); $('#btn-eye').classList.toggle('on', S.hide); };
-$('#btn-eye').addEventListener('click', () => { S.hide = !S.hide; store.set('hide', S.hide ? '1' : '0'); applyHide(); toast(S.hide ? 'ซ่อนตัวเลขแล้ว' : 'แสดงตัวเลขแล้ว'); });
+$('#btn-eye').addEventListener('click', () => { S.hide = !S.hide; store.set('hide', S.hide ? '1' : '0'); applyHide(); closeSheet(); { const k = view.scrollTop; render('n'); view.scrollTop = k; } toast(S.hide ? 'ซ่อนตัวเลขแล้ว' : 'แสดงตัวเลขแล้ว'); });
 if (api) { $('#btn-out').hidden = false; $('#btn-out').addEventListener('click', () => api.signOut()); }
 let tt; function toast(m, ok = true) {
   const t = $('#toast'); t.innerHTML = (ok ? `<span class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>` : '') + `<span></span>`; t.lastChild.textContent = m;
