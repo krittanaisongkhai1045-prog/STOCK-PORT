@@ -297,6 +297,8 @@ select.inp option{background:#16161a}
 .sqlbox{background:#08080a;border:1px solid var(--line2);border-radius:14px;padding:12px;font:11px/1.5 ui-monospace,Menlo,monospace;color:#c9c9d1;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:all}
 button.row .r-main{text-align:left}
 
+.sim-in{font-size:30px;font-weight:800;letter-spacing:-.03em;padding:12px 14px;margin-top:8px}
+
 </style>
 </head>
 <body>
@@ -369,7 +371,9 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- state ---------- */
-const S = { tab: 'home', pseg: 'overview', aseg: 'trades', filter: 'ALL', cur: store.get('cur', 'THB'), hide: store.get('hide', '0') === '1', sim: Math.max(D.contributionThb || 0, 1000) };
+const S = { tab: 'home', pseg: 'overview', aseg: 'trades', filter: 'ALL', cur: store.get('cur', 'THB'), hide: store.get('hide', '0') === '1', simIn: Math.max(D.contributionThb || 0, 1000), rcur: 'THB' };
+const simThb = () => S.rcur === 'THB' ? S.simIn : S.simIn * FX;
+const rmoney = usdV => S.rcur === 'THB' ? thb(usdV * FX) : usd(usdV);
 const TABS = ['home', 'portfolio', 'savings', 'debts'];
 const NAVIDX = { home: 0, portfolio: 1, savings: 3, debts: 4 };
 const TITLES = { home: ['สถานะการเงินของฉัน', 'ภาพรวม'], portfolio: ['พอร์ตลงทุน', 'พอร์ต'], savings: ['ทรัพย์สินสุทธิ', 'เงินออม'], debts: ['ภาระผูกพัน', 'หนี้สิน'] };
@@ -643,7 +647,7 @@ function ovBar() {
     <span style="display:flex;gap:8px"><button class="fchip" data-ovreset ${n ? '' : 'hidden'} id="ov-reset">รีเซ็ต</button><button class="fchip on" data-ovsave ${n ? '' : 'hidden'} id="ov-save">บันทึก</button></span></div>`;
 }
 P.rebalance = () => {
-  const { rows, add } = allocate(S.sim), list = [...rows].sort((a, b) => b.buyUsd - a.buyUsd || b.gap2 - a.gap2);
+  const { rows, add } = allocate(simThb()), list = [...rows].sort((a, b) => b.buyUsd - a.buyUsd || b.gap2 - a.gap2);
   return `
   <div class="card rise" ${rise(1)}><h3>ราคาปัจจุบัน &amp; อัตราแลกเปลี่ยน <a data-guide="reb">วิธีใช้ ›</a></h3>
     ${ovBar()}
@@ -651,11 +655,13 @@ P.rebalance = () => {
     <div class="pxlist">${C.hs.map(h => `<div class="pxrow"><div class="avatar" style="background:${colorOf[h.symbol]};width:36px;height:36px;border-radius:12px;font-size:10px">${mark(h.symbol)}</div>
       <div class="r-main"><b style="font-size:14px">${h.symbol}</b><small id="pxd-${h.symbol}">${pxDelta(h)}</small></div>
       <input class="inp pxin" data-px="${h.symbol}" type="number" step="any" inputmode="decimal" value="${OV.px[h.symbol] ?? h.saved}" placeholder="${h.saved}" aria-label="ราคา ${h.symbol} (USD)"></div>`).join('')}</div></div>
-  <div class="card rise" ${rise(2)}><h3>จำลองเงินลงทุนใหม่</h3>
-    <div class="sim-amt num" id="sim-amt">${thb(S.sim)}</div>
-    <div class="buyline"><span>≈ <span id="sim-usd">${usd(add)}</span></span><span id="sim-fx">FX ${nf(FX, 2)}</span></div>
-    <input type="range" id="sim" min="0" max="30000" step="100" value="${S.sim}" aria-label="เงินลงทุนใหม่ (บาท)">
-    <div class="quick">${[500, 1000, 3000, 5000, 10000].map(v => `<button class="fchip" data-q="${v}">${nf(v, 0)}</button>`).join('')}</div></div>
+  <div class="card rise" ${rise(2)}><h3>จำลองเงินลงทุนใหม่ <a data-form="holdings">จัดการหุ้น ›</a></h3>
+    <div class="seg" style="margin-bottom:12px"><div class="thumb" style="width:calc((100% - 8px)/2);transform:translateX(${S.rcur === 'THB' ? 0 : 100}%)"></div>
+      <button class="${S.rcur === 'THB' ? 'on' : ''}" data-rcur="THB">บาท (THB)</button><button class="${S.rcur === 'USD' ? 'on' : ''}" data-rcur="USD">ดอลลาร์ (USD)</button></div>
+    <label style="display:block;font-size:12px;color:var(--muted);font-weight:600">จำนวนเงินที่จะลงทุนเพิ่ม (${S.rcur === 'THB' ? 'บาท' : 'USD'})
+      <input class="inp sim-in" id="sim-in" type="number" step="any" min="0" inputmode="decimal" value="${S.simIn}" placeholder="0"></label>
+    <div class="buyline"><span>≈ <span id="sim-other">${S.rcur === 'THB' ? usd(add) : thb(add * FX)}</span></span><span id="sim-fx">FX ${nf(FX, 2)}</span></div>
+    <div class="quick">${(S.rcur === 'THB' ? [500, 1000, 3000, 5000, 10000] : [20, 50, 100, 200, 500]).map(v => `<button class="fchip" data-q="${v}">${nf(v, 0)}</button>`).join('')}</div></div>
   <div class="card rise" ${rise(3)} style="padding:6px 16px" id="sim-list">${simRows(list)}</div>
   <div class="note rise" ${rise(4)}>กติกาเดียวกับ Excel: BUY เมื่อสัดส่วนปัจจุบัน &lt; 95% ของเป้า · WATCH เมื่อ &gt; 120% ของเป้า · เงินใหม่แจกตามช่องว่างถึงเป้าหมาย ราคาที่แก้ไขใช้คำนวณทั้งแอปจนกว่าจะรีเซ็ตหรือบันทึก ผลจำลองเท่านั้น ไม่ใช่คำแนะนำการลงทุน</div>`;
 };
@@ -670,7 +676,7 @@ function simRows(list) {
       <small>${pct(r.cur)} → <b style="display:inline;color:var(--text)">${pct(r.after)}</b> · เป้า ${pct(r.target, 0)}</small>
       <div class="meter"><div class="fill" data-w="${Math.min(100, r.after / Math.max(r.target, r.after, 1e-9) * 100)}" style="background:var(--${r.status.toLowerCase()})"></div>
       <div class="tgt" style="left:${r.target / Math.max(r.target, r.after, 1e-9) * 100}%"></div></div></div>
-    <div class="r-side">${r.buyUsd > .005 ? `<b class="pos">+${thb(r.buyUsd * FX)}</b><small>~${nf(r.buyShares, 4)} หุ้น</small>` : `<b style="color:var(--faint)">—</b><small>ถึงเป้าแล้ว</small>`}</div></button>`).join('');
+    <div class="r-side">${r.buyUsd > .005 ? `<b class="pos">+${rmoney(r.buyUsd)}</b><small>~${nf(r.buyShares, 4)} หุ้น</small>` : `<b style="color:var(--faint)">—</b><small>ถึงเป้าแล้ว</small>`}</div></button>`).join('');
 }
 
 const ASEGS = [['trades', 'ซื้อขาย'], ['cash', 'เงินเข้า/ออก'], ['div', 'ปันผล']];
@@ -782,7 +788,6 @@ function render(dir = 'n') {
   view.innerHTML = V[S.tab]();
   view.scrollTop = 0; countUp(view); grow(view);
   if (S.tab === 'portfolio' && S.pseg === 'overview') drawDonut();
-  if (S.tab === 'portfolio' && S.pseg === 'rebalance') $('#sim').style.setProperty('--p', (S.sim / 30000 * 100) + '%');
   $('#hello-sub').textContent = TITLES[S.tab][0]; $('#hello-title').textContent = TITLES[S.tab][1];
   $$('#nav button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
   $('#nav .ind').style.transform = `translateX(${NAVIDX[S.tab] * 100}%)`;
@@ -801,8 +806,8 @@ function refreshSim() {
   const n = ovCount(); $('#ov-note').textContent = n ? `แก้ไข ${n} รายการ (ยังไม่บันทึก)` : 'ใส่ราคาตลาดตอนนี้เพื่อคำนวณใหม่';
   $('#ov-reset').hidden = $('#ov-save').hidden = !n; $('#sim-fx').textContent = 'FX ' + nf(FX, 2);
   C.hs.forEach(h => { const el = document.getElementById('pxd-' + h.symbol); if (el) el.innerHTML = pxDelta(h); });
-  const { rows, add } = allocate(S.sim), list = [...rows].sort((a, b) => b.buyUsd - a.buyUsd || b.gap2 - a.gap2);
-  $('#sim-amt').textContent = thb(S.sim); $('#sim-usd').textContent = usd(add); $('#sim').style.setProperty('--p', (S.sim / 30000 * 100) + '%');
+  const { rows, add } = allocate(simThb()), list = [...rows].sort((a, b) => b.buyUsd - a.buyUsd || b.gap2 - a.gap2);
+  $('#sim-other').textContent = S.rcur === 'THB' ? usd(add) : thb(add * FX);
   $('#sim-list').innerHTML = simRows(list); $$('#sim-list [data-w]').forEach(f => f.style.width = f.dataset.w + '%');
 }
 async function refresh(quiet) {
@@ -883,9 +888,9 @@ const GUIDE = {
     <div class="note"><b>ปัดซ้าย/ขวา</b> เพื่อเปลี่ยนแท็บ · <b>ลากหน้าจอลง</b> เพื่อรีเฟรชข้อมูล · ปุ่ม <b>THB/USD</b> สลับสกุลเงินที่แสดง · ปุ่ม <b>รูปตา</b> ซ่อนตัวเลขเวลาอยู่ที่สาธารณะ · ลากแถบเล็กบนหน้าต่างล่างลงเพื่อปิด</div>`,
   reb: () => `<p class="psub">Rebalance คือการปรับพอร์ตให้สัดส่วนกลับไปใกล้เป้าหมายที่ตั้งไว้ โดยใช้ <b>เงินใหม่ที่เติมเข้าไป</b> ซื้อตัวที่สัดส่วนต่ำกว่าเป้า แทนการขายตัวที่เกิน — ช่วยลดภาษีและค่าธรรมเนียม</p>
     ${gstep(1, 'อัปเดตราคา & FX', 'ไปที่ <b>พอร์ต → Rebalance</b> ใส่ราคาตลาดตอนนี้ (USD) ของแต่ละหุ้น และ FX THB/USD ปัจจุบัน ผลทุกอย่างคำนวณใหม่ทันที ถ้าไม่ใส่ จะใช้ราคาล่าสุดที่เคยบันทึก')}
-    ${gstep(2, 'ใส่เงินที่จะลงทุน', 'เลื่อนแถบหรือกดปุ่มลัด (500 / 1,000 / 3,000 …) เป็นเงินบาท แอปแปลงเป็น USD ด้วย FX ที่ใส่ไว้')}
+    ${gstep(2, 'ใส่เงินที่จะลงทุน', 'เลือกสกุลเงิน บาท หรือ USD แล้ว <b>พิมพ์จำนวนเงินเอง</b> (หรือกดปุ่มลัด) แอปแปลงอีกสกุลให้ด้วย FX ที่ใส่ไว้ และแสดงยอดที่ควรซื้อเป็นสกุลที่เลือก')}
     ${gstep(3, 'อ่านผลลัพธ์', 'แต่ละหุ้นแสดงสัดส่วน <b>ปัจจุบัน → หลังซื้อ</b> เทียบเป้า พร้อมจำนวนเงินบาทและจำนวนหุ้นโดยประมาณที่ควรซื้อ ตัวที่ขึ้น “ถึงเป้าแล้ว” ไม่ต้องซื้อเพิ่ม')}
-    ${gstep(4, 'ซื้อจริงแล้วบันทึก', 'ไปซื้อในแอปโบรกเกอร์ แล้วกลับมากด ＋ → <b>ซื้อ/ขายหุ้น</b> บันทึกรายการ (ราคา/FX จริงที่ได้) ยอดพอร์ตจะอัปเดตเอง')}
+    ${gstep(4, 'ซื้อจริงแล้วบันทึก', 'ไปซื้อในแอปโบรกเกอร์ แล้วกลับมากด ＋ → <b>ซื้อ/ขายหุ้น</b> เลือกหุ้นจากรายการ (หรือเพิ่มหุ้นใหม่) แล้วบันทึกราคา/FX จริงที่ได้ ส่วนเพิ่ม/ลดหุ้นและตั้งเป้า % ใช้ปุ่ม “จัดการหุ้น” ยอดพอร์ตจะอัปเดตเอง')}
     ${gstep(5, 'บันทึกราคาถ้าต้องการเก็บ', 'ราคา/FX ที่แก้ไขในหน้า Rebalance ใช้ชั่วคราวทั้งแอป ถ้าอยากเก็บไว้ให้กด <b>บันทึก</b> (เก็บเป็นรายการ 0 หุ้นเหมือน Excel) หรือกด <b>รีเซ็ต</b> เพื่อกลับเป็นค่าเดิม')}
     <h3 class="gh">กติกาสถานะ</h3>
     <div class="grid2" style="grid-template-columns:1fr"><div><span class="pill BUY">BUY</span> <small style="display:inline;margin-left:6px">สัดส่วนปัจจุบัน &lt; 95% ของเป้า → ควรซื้อเพิ่ม</small></div>
@@ -911,7 +916,7 @@ function openGuide(sec = 'start') {
 const MENU = [
   ['trade', 'trade', 'ซื้อ/ขายหุ้น', 'บันทึกรายการลงทุน'], ['div', 'div', 'ปันผล', 'รับปันผลหุ้น'], ['cash', 'cash', 'เงินเข้า/ออกพอร์ต', 'แลก FX / โอนกลับ'],
   ['move', 'move', 'ฝาก/ถอนเงินเก็บ', 'เพิ่มหรือลดเงินเก็บ'], ['pay', 'pay', 'จ่ายหนี้', 'บันทึกการผ่อนชำระ'], ['acct', 'acct', 'เพิ่มหมวดเงินเก็บ', 'สำรอง/ออม/เป้าหมาย'],
-  ['debt', 'debt', 'เพิ่มหนี้', 'สัญญา/บัตรใหม่'], ['settings', 'set', 'ตั้งค่า', 'FX · รายได้ · รายจ่าย']
+  ['debt', 'debt', 'เพิ่มหนี้', 'สัญญา/บัตรใหม่'], ['holdings', 'pie', 'จัดการหุ้น', 'เพิ่ม/ลดหุ้น · เป้า %'], ['settings', 'set', 'ตั้งค่า', 'FX · รายได้ · รายจ่าย']
 ];
 const TAB_FIRST = { home: 'settings', portfolio: 'trade', savings: 'move', debts: 'pay' };
 function openMenu() {
@@ -921,9 +926,16 @@ function openMenu() {
 }
 const fld = f => {
   const v = f.value ?? '', c = f.full ? 'full' : '';
-  if (f.type === 'select') return `<label class="${c}">${f.label}<select class="inp" name="${f.name}">${f.options.map(o => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return `<option value="${val}" ${String(val) === String(v) ? 'selected' : ''}>${lab}</option>`; }).join('')}</select></label>`;
-  return `<label class="${c}">${f.label}<input class="inp" name="${f.name}" type="${f.type || 'text'}" ${f.type === 'number' ? 'step="any" inputmode="decimal"' : ''} ${f.list ? `list="${f.list}"` : ''} value="${v}" ${f.req ? 'required' : ''} ${f.ph ? `placeholder="${f.ph}"` : ''} ${f.up ? 'autocapitalize="characters"' : ''}></label>`;
+  if (f.type === 'select') return `<label class="${c}" ${f.hide ? 'hidden' : ''}>${f.label}<select class="inp" name="${f.name}">${f.options.map(o => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return `<option value="${val}" ${String(val) === String(v) ? 'selected' : ''}>${lab}</option>`; }).join('')}</select></label>`;
+  return `<label class="${c}" ${f.hide ? 'hidden id="lbl-' + f.name + '"' : ''}>${f.label}<input class="inp" name="${f.name}" type="${f.type || 'text'}" ${f.type === 'number' ? 'step="any" inputmode="decimal"' : ''} ${f.list ? `list="${f.list}"` : ''} value="${v}" ${f.req ? 'required' : ''} ${f.ph ? `placeholder="${f.ph}"` : ''} ${f.up ? 'autocapitalize="characters"' : ''}></label>`;
 };
+const symOpts = (cur, withNew) => { const l = D.holdings.map(h => h.symbol); if (cur && !l.includes(cur)) l.push(cur); const o = l.map(s => [s, s]); if (withNew) o.push(['__new', '+ เพิ่มหุ้นใหม่…']); return o; };
+async function prepSym(r) {
+  if (r.symbol === '__new') r.symbol = String(r.new_symbol || '').trim().toUpperCase();
+  delete r.new_symbol;
+  if (!r.symbol) throw new Error('ใส่ชื่อหุ้นใหม่');
+  if (!D.holdings.some(h => h.symbol === r.symbol)) await api.insert('dime_holdings', { symbol: r.symbol, target: 0 });
+}
 const syms = () => `<datalist id="syms">${D.holdings.map(h => `<option value="${h.symbol}">`).join('')}</datalist>`;
 const SETUP_SQL = "-- Dime Portfolio v2 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2a\u0e48\u0e27\u0e19 \"\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\" + \"\u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\" + \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49/\u0e23\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22\n-- \u0e23\u0e31\u0e19\u0e15\u0e48\u0e2d\u0e08\u0e32\u0e01 schema.sql (SQL Editor \u2192 New query \u2192 \u0e27\u0e32\u0e07 \u2192 Run) \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49 \u0e44\u0e21\u0e48\u0e17\u0e33\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e40\u0e14\u0e34\u0e21\u0e2b\u0e32\u0e22\n\n-- \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e15\u0e34\u0e21\nalter table public.dime_settings add column if not exists monthly_income_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists monthly_expense_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists emergency_target_months numeric not null default 6;\n\n-- \u0e1a\u0e31\u0e0d\u0e0a\u0e35/\u0e01\u0e49\u0e2d\u0e19\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07 (emergency = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\u0e09\u0e38\u0e01\u0e40\u0e09\u0e34\u0e19, cash = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14\u0e2d\u0e37\u0e48\u0e19\u0e46)\ncreate table if not exists public.dime_accounts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'emergency' check (kind in ('emergency','cash')),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e1d\u0e32\u0e01(+)/\u0e16\u0e2d\u0e19(-) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e02\u0e2d\u0e07\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\ncreate table if not exists public.dime_account_moves (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  account_id bigint not null references public.dime_accounts(id) on delete cascade,\n  move_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\ncreate table if not exists public.dime_debts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'other' check (kind in ('credit_card','personal_loan','car','home','student','other')),\n  principal_thb numeric not null check (principal_thb >= 0),\n  interest_rate numeric not null default 0 check (interest_rate >= 0),   -- % \u0e15\u0e48\u0e2d\u0e1b\u0e35\n  min_payment_thb numeric not null default 0 check (min_payment_thb >= 0), -- \u0e1c\u0e48\u0e2d\u0e19\u0e02\u0e31\u0e49\u0e19\u0e15\u0e48\u0e33\u0e15\u0e48\u0e2d\u0e40\u0e14\u0e37\u0e2d\u0e19\n  due_day int check (due_day between 1 and 31),\n  started_on date,\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\u0e2b\u0e19\u0e35\u0e49 (\u0e04\u0e48\u0e32\u0e1a\u0e27\u0e01 = \u0e25\u0e14\u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49, \u0e04\u0e48\u0e32\u0e25\u0e1a = \u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49\u0e40\u0e1e\u0e34\u0e48\u0e21/\u0e14\u0e2d\u0e01\u0e40\u0e1a\u0e35\u0e49\u0e22\u0e17\u0e1a) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e40\u0e07\u0e34\u0e19\u0e15\u0e49\u0e19 - \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\ncreate table if not exists public.dime_debt_payments (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  debt_id bigint not null references public.dime_debts(id) on delete cascade,\n  pay_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\ncreate index if not exists dime_moves_user_idx    on public.dime_account_moves(user_id, account_id, move_date);\ncreate index if not exists dime_payments_user_idx on public.dime_debt_payments(user_id, debt_id, pay_date);\n\ndo $$\ndeclare t text;\nbegin\n  foreach t in array array['dime_accounts','dime_account_moves','dime_debts','dime_debt_payments'] loop\n    execute format('alter table public.%I enable row level security', t);\n    execute format('drop policy if exists \"owner only\" on public.%I', t);\n    execute format('create policy \"owner only\" on public.%I for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);\n    execute format('revoke all on public.%I from anon', t);\n  end loop;\nend $$;\n\n-- K FINANCE v3 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2b\u0e21\u0e27\u0e14\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a (\u0e40\u0e07\u0e34\u0e19\u0e2d\u0e2d\u0e21/\u0e40\u0e07\u0e34\u0e19\u0e1d\u0e32\u0e01\u0e1b\u0e23\u0e30\u0e08\u0e33/\u0e40\u0e07\u0e34\u0e19\u0e40\u0e1b\u0e49\u0e32\u0e2b\u0e21\u0e32\u0e22/\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14/\u0e2d\u0e37\u0e48\u0e19\u0e46) \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_accounts drop constraint if exists dime_accounts_kind_check;\nalter table public.dime_accounts add constraint dime_accounts_kind_check\n  check (kind in ('emergency','saving','fixed','goal','cash','other'));\n";
 function openSetup() {
@@ -939,17 +951,17 @@ function openSetup() {
 }
 const needTables = () => { if (D.needsMigration) { openSetup(); return true; } return false; };
 const FORMS = {
-  trade: o => ({ title: 'ซื้อ/ขายหุ้น', table: 'dime_trades', map: r => { if (r.action !== 'SELL') r.cost_basis_usd = null; r.symbol = r.symbol.toUpperCase(); return r; }, extra: syms() + `<div class="note full">จำนวนหุ้น = 0 คือการอัปเดต “ราคาล่าสุด” โดยไม่ซื้อขาย (เหมือนใน Excel)</div>`, fields: [
-    { name: 'trade_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'symbol', label: 'หุ้น', list: 'syms', up: 1, req: 1, value: o.sym || '' },
+  trade: o => ({ title: 'ซื้อ/ขายหุ้น', table: 'dime_trades', prep: prepSym, map: r => { if (r.action !== 'SELL') r.cost_basis_usd = null; return r; }, extra: `<div class="note full">จำนวนหุ้น = 0 คือการอัปเดต “ราคาล่าสุด” โดยไม่ซื้อขาย (เหมือนใน Excel)</div>`, fields: [
+    { name: 'trade_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'symbol', label: 'หุ้น', type: 'select', options: symOpts(o.sym, true), value: o.sym || (D.holdings[0] && D.holdings[0].symbol) || '__new' }, { name: 'new_symbol', label: 'ชื่อหุ้นใหม่ (เช่น AAPL)', up: 1, hide: 1, full: 1 },
     { name: 'action', label: 'ประเภท', type: 'select', options: ['BUY', 'SELL'] }, { name: 'shares', label: 'จำนวนหุ้น', type: 'number', req: 1 },
     { name: 'price_usd', label: 'ราคา (USD)', type: 'number', req: 1 }, { name: 'fees_usd', label: 'ค่าธรรมเนียม (USD)', type: 'number', value: 0 },
     { name: 'fx', label: 'FX THB/USD', type: 'number', value: FX, req: 1 }, { name: 'cost_basis_usd', label: 'ต้นทุน USD (เฉพาะ SELL)', type: 'number' }, { name: 'notes', label: 'หมายเหตุ', full: 1 }],
-    run: r => { if (r.action !== 'SELL') r.cost_basis_usd = null; r.symbol = r.symbol.toUpperCase(); return api.insert('dime_trades', r); } }),
-  div: () => ({ title: 'บันทึกปันผล', table: 'dime_dividends', map: r => ({ ...r, symbol: r.symbol.toUpperCase() }), extra: syms(), fields: [
-    { name: 'div_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'symbol', label: 'หุ้น', list: 'syms', up: 1, req: 1 },
+    run: r => { if (r.action !== 'SELL') r.cost_basis_usd = null; return api.insert('dime_trades', r); } }),
+  div: () => ({ title: 'บันทึกปันผล', table: 'dime_dividends', fields: [
+    { name: 'div_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'symbol', label: 'หุ้น', type: 'select', options: symOpts(null, false) },
     { name: 'gross_usd', label: 'ปันผลรวม (USD)', type: 'number', req: 1 }, { name: 'tax_usd', label: 'ภาษีที่ถูกหัก (USD)', type: 'number', value: 0 },
     { name: 'fx', label: 'FX THB/USD', type: 'number', value: FX, req: 1 }, { name: 'notes', label: 'หมายเหตุ' }],
-    run: r => { r.symbol = r.symbol.toUpperCase(); return api.insert('dime_dividends', r); } }),
+    run: r => api.insert('dime_dividends', r) }),
   cash: () => ({ title: 'เงินเข้า/ออกพอร์ต', table: 'dime_cashflow', fields: [
     { name: 'flow_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'type', label: 'ประเภท', type: 'select', options: ['FX Exchange', 'Funding', 'Remittance to Thailand', 'Other'] },
     { name: 'thb_amount', label: 'จำนวน THB', type: 'number' }, { name: 'usd_amount', label: 'จำนวน USD', type: 'number' },
@@ -991,6 +1003,7 @@ function findRec(kind, id) {
   return null;
 }
 function openForm(kind, o = {}) {
+  if (kind === 'holdings') return openHoldings();
   const edit = o.edit ? findRec(kind, o.edit) : null;
   if (o.edit && !edit) { toast('ไม่พบรายการ', false); return; }
   const F = FORMS[kind](edit ? edit.o : o), editing = !!edit;
@@ -1002,6 +1015,8 @@ function openForm(kind, o = {}) {
   openSheet(`<h2 class="sh-title">${editing ? EDIT_TITLE[kind] : F.title}</h2><form id="addform" class="form">${editing ? '' : F.extra || ''}${fields.map(fld).join('')}<button class="btn full" type="submit">บันทึก</button>
     ${editing ? `<button type="button" class="btn ghost full" id="delbtn" style="color:var(--down)">ลบรายการนี้</button>${warn ? `<div class="note warn full">${warn}</div>` : ''}` : ''}</form>`);
   $('#add').classList.remove('open');
+  const ss = $('#addform [name=symbol]'), nl = $('#lbl-new_symbol');
+  if (ss && nl) { const t = () => { nl.hidden = ss.value !== '__new'; }; ss.addEventListener('change', t); t(); }
   const done = async msg => { closeSheet(); await refresh(true); toast(msg); };
   if (editing) {
     const del = $('#delbtn'); let armed = false;
@@ -1016,10 +1031,45 @@ function openForm(kind, o = {}) {
     const row = {}; new FormData(e.target).forEach((v, k) => { v = String(v).trim(); row[k] = v === '' ? null : v; });
     fields.filter(f => f.type === 'number').forEach(f => { row[f.name] = row[f.name] == null ? null : +row[f.name]; });
     try {
+      if (F.prep) await F.prep(row);
       if (editing) { await api.update(F.table, o.edit, F.map ? F.map(row) : row); await done('แก้ไขแล้ว'); }
       else { await F.run(row); await done('บันทึกแล้ว'); }
     } catch (err) { btn.disabled = false; btn.textContent = 'บันทึก'; toast(errMsg(err), false); }
   });
+}
+function openHoldings() {
+  if (!D.holdings.length && false) return;
+  const row = h => `<div class="pxrow" data-hrow="${h.id}"><div class="avatar" style="background:${colorOf[h.symbol] || OTHER};width:36px;height:36px;border-radius:12px;font-size:10px">${mark(h.symbol)}</div>
+    <div class="r-main"><b style="font-size:14px">${h.symbol}</b><small>${h.shares ? 'ถือ ' + nf(h.shares, 4) + ' หุ้น' : 'ยังไม่ได้ถือ'}</small></div>
+    <input class="inp pxin" style="width:78px" data-ht="${h.id}" type="number" step="any" inputmode="decimal" value="${+(h.target * 100).toFixed(4)}" aria-label="เป้า % ${h.symbol}"><span style="color:var(--muted)">%</span>
+    <button class="icon-btn" data-hdel="${h.id}" aria-label="ลบ ${h.symbol}" style="color:var(--down)">✕</button></div>`;
+  openSheet(`<h2 class="sh-title">จัดการหุ้นในพอร์ต</h2>
+    <div class="note">ตั้งสัดส่วนเป้าหมาย (%) ของแต่ละหุ้น ผลรวมควรเป็น 100% · ลบหุ้นออกจากรายการเฝ้าพอร์ตได้ (ประวัติซื้อขายเดิมไม่ถูกลบ)</div>
+    <div id="hlist">${D.holdings.map(row).join('') || '<div class="empty">ยังไม่มีหุ้น</div>'}</div>
+    <div style="display:flex;justify-content:space-between;margin:10px 2px;font-size:13px"><span style="color:var(--muted)">ผลรวมเป้าหมาย</span><b id="htotal" class="num"></b></div>
+    <button class="btn" style="width:100%;margin-bottom:16px" id="hsave">บันทึกเป้าหมาย</button>
+    <h3 class="gh">เพิ่มหุ้นใหม่</h3>
+    <div class="form"><label>ชื่อหุ้น<input class="inp" id="hn-sym" autocapitalize="characters" placeholder="เช่น AAPL"></label><label>เป้า %<input class="inp" id="hn-t" type="number" step="any" inputmode="decimal" placeholder="0"></label>
+      <button class="btn ghost full" id="hadd" type="button">+ เพิ่มหุ้น</button></div>`);
+  $('#add').classList.remove('open');
+  const tot = () => { const v = $$('[data-ht]', sbody).reduce((s, i) => s + (parseFloat(i.value) || 0), 0); const el = $('#htotal'); if (!el) return; el.textContent = nf(v, 2) + '%'; el.style.color = Math.abs(v - 100) < .01 ? 'var(--up)' : 'var(--watch)'; };
+  tot(); sbody.addEventListener('input', tot);
+  const fin2 = async m => { await refresh(true); toast(m); openHoldings(); };
+  $('#hsave').addEventListener('click', async e => {
+    e.target.disabled = true;
+    try { for (const h of D.holdings) { const i = $(`[data-ht="${h.id}"]`, sbody), v = (parseFloat(i && i.value) || 0) / 100; if (i && Math.abs(v - h.target) > 1e-9) await api.update('dime_holdings', h.id, { target: clamp(v, 0, 1) }); } await fin2('บันทึกเป้าหมายแล้ว'); }
+    catch (err) { e.target.disabled = false; toast('ผิดพลาด: ' + (err.message || err), false); }
+  });
+  $('#hadd').addEventListener('click', async () => {
+    const s = $('#hn-sym').value.trim().toUpperCase(), t = (parseFloat($('#hn-t').value) || 0) / 100;
+    if (!s) return toast('ใส่ชื่อหุ้น', false); if (D.holdings.some(h => h.symbol === s)) return toast('มีหุ้นนี้อยู่แล้ว', false);
+    try { await api.insert('dime_holdings', { symbol: s, target: clamp(t, 0, 1) }); await fin2('เพิ่มหุ้นแล้ว'); } catch (err) { toast('ผิดพลาด: ' + (err.message || err), false); }
+  });
+  sbody.querySelectorAll('[data-hdel]').forEach(btn => { let armed = false; btn.addEventListener('click', async () => {
+    const h = D.holdings.find(x => x.id === +btn.dataset.hdel);
+    if (!armed) { armed = true; btn.textContent = 'ลบ?'; btn.style.background = 'rgba(255,45,70,.25)'; setTimeout(() => { armed = false; btn.textContent = '✕'; btn.style.background = ''; }, 3000); return; }
+    try { await api.remove('dime_holdings', h.id); await fin2('ลบ ' + h.symbol + ' แล้ว'); } catch (err) { toast('ผิดพลาด: ' + (err.message || err), false); }
+  }); });
 }
 function errMsg(err) {
   const m = String(err.message || err);
@@ -1042,7 +1092,8 @@ function onClick(e) {
   if ((el = q('[data-filter]'))) { S.filter = el.dataset.filter; return render('n'); }
   if (q('[data-ovreset]')) { OV.px = {}; OV.fx = null; FX = D.fx; render('n'); return toast('รีเซ็ตเป็นค่าที่บันทึกแล้ว'); }
   if (q('[data-ovsave]')) return saveOv();
-  if ((el = q('[data-q]'))) { S.sim = +el.dataset.q; $('#sim').value = S.sim; return refreshSim(); }
+  if ((el = q('[data-rcur]'))) { const to = el.dataset.rcur; if (to !== S.rcur) { S.simIn = to === 'USD' ? Math.round(S.simIn / FX * 100) / 100 : Math.round(S.simIn * FX); S.rcur = to; } return render('n'); }
+  if ((el = q('[data-q]'))) { S.simIn = +el.dataset.q; $('#sim-in').value = S.simIn; return refreshSim(); }
   if ((el = q('[data-sym]'))) return openHolding(el.dataset.sym);
   if ((el = q('[data-acc]'))) return openAccount(el.dataset.acc);
   if ((el = q('[data-debt]'))) return openDebt(el.dataset.debt);
@@ -1050,7 +1101,7 @@ function onClick(e) {
 view.addEventListener('click', onClick); sbody.addEventListener('click', onClick);
 view.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'sim') { S.sim = +t.value; refreshSim(); }
+  if (t.id === 'sim-in') { S.simIn = Math.max(0, parseFloat(t.value) || 0); refreshSim(); }
   else if (t.id === 'ov-fx') { const v = parseFloat(t.value); if (v > 0 && v !== D.fx) OV.fx = v; else OV.fx = null; FX = OV.fx ?? D.fx; refreshSim(); }
   else if (t.dataset.px) { const v = parseFloat(t.value), h = D.holdings.find(x => x.symbol === t.dataset.px); if (v > 0 && h && v !== h.price) OV.px[t.dataset.px] = v; else delete OV.px[t.dataset.px]; refreshSim(); }
 });
@@ -1160,7 +1211,7 @@ return { reload: nd => { setData(nd); render('n'); } };
     return {
       updated: new Date().toISOString().slice(0, 10), fx: n(set.fx) || 33, contributionThb: n(set.contribution_thb), needsMigration,
       settings: { income: n(set.monthly_income_thb), expense: n(set.monthly_expense_thb), targetMonths: n(set.emergency_target_months) || 6 },
-      holdings: hd.data.map(h => ({ symbol: h.symbol, target: n(h.target), shares: shares[h.symbol] || 0, price: price[h.symbol] || 0 })),
+      holdings: hd.data.map(h => ({ id: h.id, symbol: h.symbol, target: n(h.target), shares: shares[h.symbol] || 0, price: price[h.symbol] || 0 })),
       trades, cashflow, dividends, tax, accounts, debts
     };
   }
