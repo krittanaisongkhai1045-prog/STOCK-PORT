@@ -578,11 +578,42 @@ function segHtml(list, cur, attr, i = 0) {
 }
 V.portfolio = () => segHtml(PSEGS, S.pseg, 'pseg') + P[S.pseg]();
 
+const DUPSRC = [
+  ['trade', 'dime_trades', () => D.trades, t => [t.date, t.symbol, t.action, t.shares, t.price, t.fx], t => `${t.symbol} · ${nf(t.shares, 4)} @ ${usd(t.price)}`, 'ซื้อขาย'],
+  ['div', 'dime_dividends', () => D.dividends, v => [v.date, v.symbol, v.grossUsd, v.taxUsd, v.fx], v => `${v.symbol} · ปันผล ${usd(v.grossUsd)}`, 'ปันผล'],
+  ['cash', 'dime_cashflow', () => D.cashflow, c => [c.date, c.type, c.thb, c.usd, c.fx, c.direction], c => `${c.type} · ${thb(c.thb)}`, 'เงินเข้า/ออก']
+];
+function dupes() {
+  const out = [];
+  DUPSRC.forEach(([kind, table, get, key, label, name]) => {
+    const g = {}; get().forEach(t => { const k = key(t).join('|'); (g[k] = g[k] || []).push(t); });
+    Object.values(g).filter(x => x.length > 1).forEach(items => { items.sort((a, b) => a.id - b.id); out.push({ kind, table, name, items, label: label(items[0]), date: items[0].date }); });
+  });
+  return out;
+}
+function openDupes() {
+  const ds = dupes(), extra = sumBy(ds, x => x.items.length - 1);
+  if (!ds.length) { openSheet(`<h2 class="sh-title">ตรวจรายการซ้ำ</h2><div class="empty"><span class="e">✅</span>ไม่พบรายการซ้ำ</div>`); return; }
+  openSheet(`<h2 class="sh-title">ตรวจรายการซ้ำ</h2>
+    <div class="note">พบ ${ds.length} กลุ่มที่ข้อมูลเหมือนกันทุกช่อง (ซ้ำเกิน <b>${extra}</b> รายการ) กด “ลบรายการซ้ำทั้งหมด” เพื่อเก็บไว้กลุ่มละ 1 รายการ (เก็บรายการเก่าสุด) หรือแตะรายการเพื่อลบทีละรายการ</div>
+    <button class="btn" style="width:100%;margin-bottom:6px" id="dedupe">ลบรายการซ้ำทั้งหมด (${extra})</button>
+    ${ds.map(x => `<div class="dgroup">${x.name} · ${dateTh(x.date)} · ${x.items.length} รายการเหมือนกัน</div><div class="card" style="padding:4px 16px;margin-bottom:6px">${x.items.map((t, i) => `<button class="row rip" data-edit="${x.kind}:${t.id}"><div class="r-main"><b style="font-size:14px">#${t.id}${i ? ' <span class="pill WATCH">ซ้ำ</span>' : ' <span class="pill ok">เก็บไว้</span>'}</b><small>${x.label}</small></div></button>`).join('')}</div>`).join('')}`);
+  const btn = $('#dedupe'); let armed = false;
+  btn.addEventListener('click', async () => {
+    if (!armed) { armed = true; btn.textContent = `กดอีกครั้งเพื่อยืนยันลบ ${extra} รายการ`; return; }
+    btn.disabled = true; btn.textContent = 'กำลังลบ…';
+    try {
+      for (const x of ds) { const ids = x.items.slice().sort((a, b) => a.id - b.id).slice(1).map(t => t.id); await api.removeMany(x.table, ids); }
+      closeSheet(); await refresh(true); toast(`ลบรายการซ้ำ ${extra} รายการแล้ว`);
+    } catch (err) { btn.disabled = false; btn.textContent = 'ลองอีกครั้ง'; armed = false; toast('ผิดพลาด: ' + (err.message || err), false); }
+  });
+}
 P.overview = () => {
   const plU = C.total - C.costUsd, plPct = C.costUsd ? plU / C.costUsd : 0;
   const list = [...C.hs].filter(h => S.filter === 'ALL' || h.status === S.filter).sort((a, b) => b.value - a.value);
   const cnt = f => f === 'ALL' ? C.hs.length : C.hs.filter(h => h.status === f).length;
-  return `
+  const dp = dupes();
+  return `${dp.length ? `<button class="note warn rise" data-dupes style="display:block;width:100%;text-align:left">พบรายการที่อาจซ้ำ ${dp.length} กลุ่ม — <b>แตะเพื่อตรวจและลบ</b> (มูลค่าพอร์ตอาจสูงเกินจริง)</button>` : ''}
   ${hero('มูลค่าพอร์ตลงทุน', 'mu', C.total, `<div class="meta"><span class="${plU >= 0 ? 'pos' : 'neg'}">${plU >= 0 ? '▲' : '▼'} ${A('smu', plU)} (${A('spct', plPct)})</span><span>ต้นทุน ${S.cur === 'THB' ? A('thb', C.costThb) : A('usd', C.costUsd)}</span><span>FX ${nf(FX, 2)}</span></div>`)}
   <div class="card rise" ${rise(2)}><h3>สัดส่วนพอร์ต</h3>
     <div class="donut-wrap"><div class="donut"><svg viewBox="0 0 120 120" id="donut"></svg><div class="mid"><b id="d-mid">${C.hs.length}</b><small id="d-sub">สินทรัพย์</small></div></div><div class="legend" id="legend"></div></div>
@@ -1001,6 +1032,7 @@ function onClick(e) {
   const q = s => e.target.closest(s); let el;
   if ((el = q('[data-gseg]'))) return openGuide(el.dataset.gseg);
   if ((el = q('[data-guide]'))) return openGuide(el.dataset.guide);
+  if (q('[data-dupes]')) return openDupes();
   if (q('[data-setup]')) return openSetup();
   if ((el = q('[data-edit]'))) { const [k, id] = el.dataset.edit.split(':'); return openForm(k, { edit: id }); }
   if ((el = q('[data-form]'))) { const ds = el.dataset; return openForm(ds.form, { id: ds.id, dir: ds.dir, sym: ds.sym }); }
@@ -1137,6 +1169,7 @@ return { reload: nd => { setData(nd); render('n'); } };
     async insert(table, row) { const { data, error } = await sb.from(table).insert(row).select().single(); if (error) throw error; return data; },
     async update(table, id, row) { const { data, error } = await sb.from(table).update(row).eq('id', id).select(); if (error) throw error; if (!data || !data.length) throw new Error('ไม่พบรายการ หรือไม่มีสิทธิ์แก้ไข'); },
     async remove(table, id) { const { data, error } = await sb.from(table).delete().eq('id', id).select(); if (error) throw error; if (!data || !data.length) throw new Error('ไม่พบรายการ หรือไม่มีสิทธิ์ลบ'); },
+    async removeMany(table, ids) { if (!ids.length) return; const { error } = await sb.from(table).delete().in('id', ids); if (error) throw error; },
     async upsertSettings(row) { const { error } = await sb.from('dime_settings').upsert({ ...row, user_id: uid, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); if (error) throw error; },
     async signOut() { await sb.auth.signOut(); location.reload(); }
   };
