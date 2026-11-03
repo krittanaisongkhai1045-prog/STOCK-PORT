@@ -471,6 +471,11 @@ button.row .r-main{text-align:left}
 .cd{height:46px;width:46px;max-width:none}
 .cd.blank{height:0;width:auto}
 
+/* live quotes bar */
+.qbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:12px 14px;border-radius:18px;background:linear-gradient(135deg,rgba(255,45,70,.12),rgba(255,255,255,.03));border:1px solid rgba(255,45,70,.2);font-size:13px;font-weight:600}
+.qbar small{display:block;margin-top:3px;font-size:10.5px;font-weight:500;color:var(--muted);line-height:1.35}
+.qbar .fchip{white-space:nowrap}
+
 </style>
 </head>
 <body>
@@ -595,11 +600,16 @@ const svg = k => `<svg viewBox="0 0 24 24">${IC[k]}</svg>`;
 
 /* ---------- portfolio calc (ตรรกะเดียวกับ Excel) ---------- */
 const OV = { px: {}, fx: null };
-let FX = D.fx;
+let LQ = { px: {}, fx: null, at: 0 };   // ราคาตลาดที่ดึงอัตโนมัติ (ใช้แสดงพอร์ตเท่านั้น ไม่ใช้ในหน้า rebalance)
+try { const j = JSON.parse(store.get('lq', 'null')); if (j && j.px) LQ = j; } catch {}
+const isReb = () => S.tab === 'portfolio' && S.pseg === 'rebalance';
+const liveOn = () => !isReb() && store.get('livepx', '1') === '1';
+const fxNow = () => OV.fx ?? (liveOn() && LQ.fx > 0 ? LQ.fx : D.fx);
+let FX = fxNow();
 let buys = D.trades.filter(t => t.shares > 0);
 function calc() {
   const hs = D.holdings.map(h => {
-    const price = OV.px[h.symbol] ?? h.price, value = h.shares * price, tr = buys.filter(t => t.symbol === h.symbol);
+    const price = OV.px[h.symbol] ?? (liveOn() ? LQ.px[h.symbol] : null) ?? h.price, value = h.shares * price, tr = buys.filter(t => t.symbol === h.symbol);
     const costUsd = tr.reduce((a, t) => a + (t.action === 'SELL' ? -t.net : t.net), 0);
     const costThb = tr.reduce((a, t) => a + (t.action === 'SELL' ? -t.netThb : t.netThb), 0);
     return { ...h, price, saved: h.price, value, costUsd, costThb, trades: tr };
@@ -619,7 +629,8 @@ const PAL = ['#ff2d46', '#ff7a3d', '#ffb547', '#a78bfa', '#38bdf8', '#34d399'], 
 const colorOf = {};
 function recolor() { Object.keys(colorOf).forEach(k => delete colorOf[k]); [...C.hs].sort((a, b) => b.value - a.value).forEach((h, i) => colorOf[h.symbol] = PAL[i] || OTHER); }
 recolor();
-function setData(nd) { D = nd; FX = OV.fx ?? D.fx; buys = D.trades.filter(t => t.shares > 0); C = calc(); recolor(); }
+function sync() { FX = fxNow(); C = calc(); recolor(); }
+function setData(nd) { D = nd; FX = fxNow(); buys = D.trades.filter(t => t.shares > 0); C = calc(); recolor(); }
 
 /* ---------- financial summary ---------- */
 const sumBy = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
@@ -822,6 +833,7 @@ P.overview = () => {
   const dp = dupes();
   return `${dp.length ? `<button class="note warn rise" data-dupes style="display:block;width:100%;text-align:left">พบรายการที่อาจซ้ำ ${dp.length} กลุ่ม — <b>แตะเพื่อตรวจและลบ</b> (มูลค่าพอร์ตอาจสูงเกินจริง)</button>` : ''}
   ${hero('มูลค่าพอร์ตลงทุน', 'mu', C.total, `<div class="meta"><span class="${plU >= 0 ? 'pos' : 'neg'}">${plU >= 0 ? '▲' : '▼'} ${A('smu', plU)} (${A('spct', plPct)})</span><span>ต้นทุน ${S.cur === 'THB' ? A('thb', C.costThb) : A('usd', C.costUsd)}</span><span>FX ${nf(FX, 2)}</span></div>`)}
+  ${qbarHtml()}
   <div class="card rise" ${rise(2)}><h3>สัดส่วนพอร์ต</h3>
     <div class="donut-wrap"><div class="donut"><svg viewBox="0 0 120 120" id="donut"></svg><div class="mid"><b id="d-mid">${C.hs.length}</b><small id="d-sub">สินทรัพย์</small></div></div><div class="legend" id="legend"></div></div>
   </div>
@@ -836,6 +848,38 @@ P.overview = () => {
   </div>`;
 };
 
+const qTime = () => { const d = new Date(LQ.at); return p2(d.getHours()) + '.' + p2(d.getMinutes()) + ' น.'; };
+function qbarHtml() {
+  const on = store.get('livepx', '1') === '1', has = !!store.get('fhkey', ''), got = Object.keys(LQ.px).length;
+  const msg = !has ? 'ยังไม่ได้ตั้งค่าดึงราคาอัตโนมัติ' : !on ? 'ปิดราคาอัตโนมัติ — ใช้ราคาที่บันทึกไว้' : LQ.at ? `ราคาตลาด ${got}/${D.holdings.length} ตัว · อัปเดต ${qTime()}` : 'ยังไม่เคยดึงราคา';
+  return `<div class="qbar rise" ${rise(2)}><span>${msg}<small>อาจต่างจากใน Dime เล็กน้อย · หน้า rebalance ใช้ราคาที่กรอกเอง</small></span>
+    <span style="display:flex;gap:8px"><button class="fchip ${has && on ? 'on' : ''}" data-qfetch>${has ? 'ดึงราคา' : 'ตั้งค่า'}</button>${has ? '<button class="fchip" data-qset aria-label="ตั้งค่า">⚙</button>' : ''}</span></div>`;
+}
+let qBusy = false;
+async function fetchQuotes(manual) {
+  const key = store.get('fhkey', ''); if (!key) { if (manual) openQuoteSheet(); return; }
+  if (qBusy || (!manual && Date.now() - LQ.at < 60000) || !D.holdings.length) return;
+  qBusy = true; const btn = $('[data-qfetch]'); if (btn) { btn.disabled = true; btn.textContent = 'กำลังดึง…'; }
+  const nq = { px: { ...LQ.px }, fx: LQ.fx, at: Date.now() }; let bad = 0, auth = false;
+  await Promise.all(D.holdings.map(async h => {
+    try { const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(h.symbol)}&token=${encodeURIComponent(key)}`);
+      if (r.status === 401 || r.status === 403) { auth = true; throw 0; } if (!r.ok) throw 0; const j = await r.json(); if (j && j.c > 0) nq.px[h.symbol] = j.c; else throw 0; } catch { bad++; }
+  }));
+  try { const r = await fetch('https://open.er-api.com/v6/latest/USD'); const j = await r.json(); if (j && j.rates && j.rates.THB > 0) nq.fx = j.rates.THB; } catch {}
+  qBusy = false;
+  if (auth && !Object.keys(nq.px).length) { if (manual) toast('API key ไม่ถูกต้อง', false); return render('n'); }
+  LQ = nq; store.set('lq', JSON.stringify(LQ));
+  if (isReb()) { if (manual) toast('ดึงราคาแล้ว (หน้านี้ยังใช้ราคาที่กรอกเอง)'); return; }
+  const k = view.scrollTop; render('n'); view.scrollTop = k; if (manual) toast(bad ? `ดึงได้ ${D.holdings.length - bad}/${D.holdings.length} ตัว` : 'อัปเดตราคาตลาดแล้ว', !bad);
+}
+function openQuoteSheet() {
+  const key = store.get('fhkey', ''), on = store.get('livepx', '1') === '1';
+  openSheet(`<h2 class="sh-title">ดึงราคาหุ้นอัตโนมัติ</h2>
+    <div class="note" style="margin-bottom:12px">ใช้ Finnhub (ฟรี) — สมัครที่ <b>finnhub.io/register</b> แล้วคัดลอก API key มาวาง key เก็บในเครื่องนี้เท่านั้น ไม่ได้ส่งไปที่อื่น ราคาที่ได้เป็นราคาตลาด US ซึ่งอาจต่างจาก Dime เล็กน้อย จึงใช้แสดงมูลค่าพอร์ตเท่านั้น ส่วนหน้า rebalance ยังกรอกราคาเอง</div>
+    <label style="display:block;font-size:12px;color:var(--muted);font-weight:600">Finnhub API key<input class="inp" id="q-key" autocomplete="off" autocapitalize="off" spellcheck="false" value="${key}" placeholder="วาง API key ที่นี่"></label>
+    <button class="btn" id="q-save" style="width:100%;margin-top:14px">บันทึกและดึงราคา</button>
+    ${key ? `<div class="quick" style="margin-top:12px"><button class="fchip" data-qtoggle>${on ? 'ปิดราคาอัตโนมัติ' : 'เปิดราคาอัตโนมัติ'}</button><button class="fchip" data-qclear>ลบ key</button></div>` : ''}`);
+}
 function allocate(contribThb) {
   const add = contribThb / FX, tot = C.total + add, rows = C.hs.map(h => ({ ...h, gap2: Math.max(0, h.target * tot - h.value) }));
   const sumGap = sumBy(rows, r => r.gap2), scale = sumGap > 0 ? Math.min(1, add / sumGap) : 0;
@@ -866,7 +910,7 @@ P.rebalance = () => {
     <div class="buyline"><span>≈ <span id="sim-other">${S.rcur === 'THB' ? usd(add) : thb(add * FX)}</span></span><span id="sim-fx">FX ${nf(FX, 2)}</span></div>
     <div class="quick">${(S.rcur === 'THB' ? [500, 1000, 3000, 5000, 10000] : [20, 50, 100, 200, 500]).map(v => `<button class="fchip" data-q="${v}">${nf(v, 0)}</button>`).join('')}</div></div>
   <div class="card rise" ${rise(3)} style="padding:6px 16px" id="sim-list">${simRows(list)}</div>
-  <div class="note rise" ${rise(4)}>กติกาเดียวกับ Excel: BUY เมื่อสัดส่วนปัจจุบัน &lt; 95% ของเป้า · WATCH เมื่อ &gt; 120% ของเป้า · เงินใหม่แจกตามช่องว่างถึงเป้าหมาย ราคาที่แก้ไขใช้คำนวณทั้งแอปจนกว่าจะรีเซ็ตหรือบันทึก ผลจำลองเท่านั้น ไม่ใช่คำแนะนำการลงทุน</div>`;
+  <div class="note rise" ${rise(4)}>กติกาเดียวกับ Excel: BUY เมื่อสัดส่วนปัจจุบัน &lt; 95% ของเป้า · WATCH เมื่อ &gt; 120% ของเป้า · เงินใหม่แจกตามช่องว่างถึงเป้าหมาย หน้านี้ใช้ราคาที่บันทึก/กรอกเอง ไม่ใช้ราคาที่ดึงอัตโนมัติ ราคาที่แก้ไขใช้คำนวณทั้งแอปจนกว่าจะรีเซ็ตหรือบันทึก ผลจำลองเท่านั้น ไม่ใช่คำแนะนำการลงทุน</div>`;
 };
 function pxDelta(h) {
   if (h.price === h.saved) return `ล่าสุดที่บันทึก ${usd(h.saved)}`;
@@ -1086,6 +1130,7 @@ function drawDonut() {
 /* ---------- render / nav ---------- */
 const view = $('#view');
 function render(dir = 'n') {
+  sync();
   view.className = 'view enter-' + dir;
   view.innerHTML = V[S.tab]();
   view.scrollTop = 0; countUp(view); grow(view);
@@ -1113,6 +1158,7 @@ function refreshSim() {
   $('#sim-list').innerHTML = simRows(list); $$('#sim-list [data-w]').forEach(f => f.style.width = f.dataset.w + '%');
 }
 async function refresh(quiet) {
+  fetchQuotes(false);
   if (api && api.load) { try { setData(await api.load()); } catch (err) { toast('โหลดไม่สำเร็จ: ' + (err.message || err), false); return; } }
   const keep = view.scrollTop; render('n'); view.scrollTop = keep; if (!quiet) toast('อัปเดตแล้ว');
 }
@@ -1419,6 +1465,11 @@ function onClick(e) {
   if (q('#sal-save')) return otSalarySave();
   if ((el = q('[data-otcopy]'))) return otCopy(el.dataset.otcopy);
   if ((el = q('[data-calnav]'))) { const k = +el.dataset.calnav; if (!k) { S.calY = new Date().getFullYear(); S.calM = new Date().getMonth(); } else { S.calM += k; if (S.calM < 0) { S.calM = 11; S.calY--; } if (S.calM > 11) { S.calM = 0; S.calY++; } } return otUpdate(true); }
+  if (q('[data-qfetch]')) return fetchQuotes(true);
+  if (q('[data-qset]')) return openQuoteSheet();
+  if (q('#q-save')) { const v = $('#q-key').value.trim(); if (!v) return toast('วาง API key ก่อน', false); store.set('fhkey', v); store.set('livepx', '1'); LQ.at = 0; closeSheet(); return fetchQuotes(true); }
+  if (q('[data-qtoggle]')) { store.set('livepx', store.get('livepx', '1') === '1' ? '0' : '1'); closeSheet(); const k = view.scrollTop; render('n'); view.scrollTop = k; return toast('บันทึกการตั้งค่าแล้ว'); }
+  if (q('[data-qclear]')) { store.set('fhkey', ''); store.set('lq', 'null'); LQ = { px: {}, fx: null, at: 0 }; closeSheet(); render('n'); return toast('ลบ key แล้ว'); }
   if (q('[data-dupes]')) return openDupes();
   if (q('[data-setup]')) return openSetup();
   if ((el = q('[data-edit]'))) { const [k, id] = el.dataset.edit.split(':'); return openForm(k, { edit: id }); }
@@ -1427,7 +1478,7 @@ function onClick(e) {
   if ((el = q('[data-pseg]'))) { S.pseg = el.dataset.pseg; return render('n'); }
   if ((el = q('[data-aseg]'))) { S.aseg = el.dataset.aseg; return render('n'); }
   if ((el = q('[data-filter]'))) { S.filter = el.dataset.filter; return render('n'); }
-  if (q('[data-ovreset]')) { OV.px = {}; OV.fx = null; FX = D.fx; render('n'); return toast('รีเซ็ตเป็นค่าที่บันทึกแล้ว'); }
+  if (q('[data-ovreset]')) { OV.px = {}; OV.fx = null; render('n'); return toast('รีเซ็ตเป็นค่าที่บันทึกแล้ว'); }
   if (q('[data-ovsave]')) return saveOv();
   if ((el = q('[data-rcur]'))) { const to = el.dataset.rcur; if (to !== S.rcur) { S.simIn = to === 'USD' ? Math.round(S.simIn / FX * 100) / 100 : Math.round(S.simIn * FX); S.rcur = to; } return render('n'); }
   if ((el = q('[data-q]'))) { S.simIn = +el.dataset.q; $('#sim-in').value = S.simIn; return refreshSim(); }
@@ -1441,7 +1492,7 @@ view.addEventListener('input', e => {
   if (t.dataset.otf) { S.otF[t.dataset.otf] = t.value; const p = $('#otprev'); if (p) p.innerHTML = otPrevHtml(); return; }
   if (t.id === 'sal-s' || t.id === 'sal-d' || t.id === 'sal-h') { $('#ratetbl').innerHTML = otRateTable(parseFloat($('#sal-s').value) || 0, parseFloat($('#sal-d').value) || 30, parseFloat($('#sal-h').value) || 8); return; }
   if (t.id === 'sim-in') { S.simIn = Math.max(0, parseFloat(t.value) || 0); refreshSim(); }
-  else if (t.id === 'ov-fx') { const v = parseFloat(t.value); if (v > 0 && v !== D.fx) OV.fx = v; else OV.fx = null; FX = OV.fx ?? D.fx; refreshSim(); }
+  else if (t.id === 'ov-fx') { const v = parseFloat(t.value); if (v > 0 && v !== D.fx) OV.fx = v; else OV.fx = null; FX = fxNow(); refreshSim(); }
   else if (t.dataset.px) { const v = parseFloat(t.value), h = D.holdings.find(x => x.symbol === t.dataset.px); if (v > 0 && h && v !== h.price) OV.px[t.dataset.px] = v; else delete OV.px[t.dataset.px]; refreshSim(); }
 });
 async function saveOv() {
@@ -1491,6 +1542,7 @@ document.addEventListener('pointerdown', e => {   // ripple
 /* ---------- boot ---------- */
 applyHide(); render('n');
 window.hideSplash();
+fetchQuotes(false);
 return { reload: nd => { setData(nd); render('n'); } };
 };
 
