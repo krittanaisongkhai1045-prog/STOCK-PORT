@@ -476,6 +476,26 @@ button.row .r-main{text-align:left}
 .qbar small{display:block;margin-top:3px;font-size:10.5px;font-weight:500;color:var(--muted);line-height:1.35}
 .qbar .fchip{white-space:nowrap}
 
+/* cash pots */
+.cashact{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px;margin-bottom:14px}.cashact .btn{padding:14px 6px;font-size:14px;border-radius:18px}
+.potgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pot{text-align:left;display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:22px;background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.07);position:relative;overflow:hidden;transition:transform .3s var(--spring)}
+.pot:active{transform:scale(.96)}
+.pot .pe{font-size:24px;line-height:1}.pot b{font-size:13.5px}.pot .pb{font-size:19px;font-weight:800;letter-spacing:-.02em}.pot small{font-size:10.5px;color:var(--muted)}
+.pxrow .pe{font-size:22px;width:36px;text-align:center}
+.spendbars{margin:0 0 8px}.sb{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;padding:6px 0;font-size:12.5px}.sb span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sb b{font-size:12.5px}
+.mbars{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;height:96px;margin:12px 0 14px;align-items:end}
+.mbars div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:4px}
+.mbars i{display:block;width:100%;min-height:3px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,var(--red),#7a0f20)}
+.mbars span{font-size:9px;color:var(--faint)}
+.snapsvg{width:100%;height:110px;display:block}
+.hollist{margin:12px 0 0;font-size:11.5px;line-height:1.6;color:var(--red2)}
+.hollist i{width:7px;height:7px;border-radius:50%;background:var(--red2);display:inline-block;margin-right:6px;vertical-align:middle}
+.holnote{margin-top:10px;padding:10px 12px;border-radius:14px;background:rgba(255,106,61,.1);border:1px solid rgba(255,106,61,.25);font-size:12.5px;color:var(--red2);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cd.hol:not(.sel) .dn{color:var(--red2)}
+.cd.hol:not(.sel)::after{content:"";position:absolute;bottom:5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--red2)}
+#toast.act.show{pointer-events:auto}#toast .tact{margin-left:6px;padding:5px 12px;border-radius:99px;background:#000;color:#fff;font-weight:800;font-size:12px}
+
 </style>
 </head>
 <body>
@@ -578,8 +598,8 @@ const S = { calY: new Date().getFullYear(), calM: new Date().getMonth(), tab: 'h
 const simThb = () => S.rcur === 'THB' ? S.simIn : S.simIn * FX;
 const rmoney = usdV => S.rcur === 'THB' ? thb(usdV * FX) : usd(usdV);
 const TABS = ['home', 'portfolio', 'savings', 'debts'];
-const NAVIDX = { home: 0, portfolio: 1, savings: 3, debts: 4, ot: -1 };
-const TITLES = { home: ['สถานะการเงินของฉัน', 'ภาพรวม'], portfolio: ['พอร์ตลงทุน', 'พอร์ต'], savings: ['ทรัพย์สินสุทธิ', 'เงินออม'], debts: ['ภาระผูกพัน', 'หนี้สิน'], ot: ['ทำงานล่วงเวลา', 'บันทึก OT'] };
+const NAVIDX = { home: 0, portfolio: 1, savings: 3, debts: 4, ot: -1, cash: -1 };
+const TITLES = { home: ['สถานะการเงินของฉัน', 'ภาพรวม'], portfolio: ['พอร์ตลงทุน', 'พอร์ต'], savings: ['ทรัพย์สินสุทธิ', 'เงินออม'], debts: ['ภาระผูกพัน', 'หนี้สิน'], ot: ['ทำงานล่วงเวลา', 'บันทึก OT'], cash: ['กระปุกเงิน', 'รายรับ-รายจ่าย'] };
 const KIND = { credit_card: 'บัตรเครดิต', personal_loan: 'สินเชื่อส่วนบุคคล', car: 'ผ่อนรถ', home: 'ผ่อนบ้าน', student: 'กู้การศึกษา', other: 'อื่นๆ' };
 const AK = { emergency: ['เงินสำรองฉุกเฉิน', 'shield', '#ff2d46'], saving: ['เงินออม', 'wallet', '#ffb547'], fixed: ['เงินฝากประจำ/กองทุน', 'pie', '#a78bfa'],
   goal: ['เงินเป้าหมาย', 'bell', '#34d399'], cash: ['เงินสด', 'cash', '#38bdf8'], other: ['อื่นๆ', 'acct', '#8d8d99'] };
@@ -779,8 +799,10 @@ V.home = () => {
       <div class="r-main"><b style="font-size:14px">${t[2]}</b><small>${t[3]}</small></div></button>`).join('')
       : `<div class="empty"><span class="e">✅</span>ทุกอย่างเรียบร้อย ไม่มีงานค้าง</div>`}
   </div>
-  <button class="tile rip rise" ${rise(4)} data-go="ot" style="width:100%;min-height:0;margin-bottom:14px;flex-direction:row;align-items:center;gap:12px"><div class="ic" style="margin:0">${svg('clock')}</div><div style="flex:1"><b style="font-size:15px">บันทึก OT</b><span class="s" style="display:block">ปฏิทินชั่วโมงล่วงเวลา · ค่า OT เดือนนี้ ${A('thb', otMonthPay())}</span></div></button>
-  <button class="tile rip rise" ${rise(5)} data-guide="start" style="width:100%;min-height:0;margin-bottom:14px;flex-direction:row;align-items:center;gap:12px"><div class="ic" style="margin:0">${svg('chk')}</div><div><b style="font-size:15px">วิธีใช้งาน &amp; วิธี Rebalance</b><span class="s" style="display:block">อ่านสั้นๆ ก่อนเริ่มใช้</span></div></button>
+  ${snapChartHtml('net', 'ทรัพย์สินสุทธิย้อนหลัง')}
+  <button class="tile rip rise" data-go="cash" style="--i:4;width:100%;min-height:0;margin-bottom:14px;flex-direction:row;align-items:center;gap:12px"><div class="ic" style="margin:0">${svg('cash')}</div><div style="flex:1"><b style="font-size:15px">รายรับ-รายจ่าย</b><span class="s" style="display:block">กระปุกเงิน · เหลือรวม ${A('thb', potsTotal())}</span></div></button>
+  <button class="tile rip rise" data-go="ot" style="--i:4;width:100%;min-height:0;margin-bottom:14px;flex-direction:row;align-items:center;gap:12px"><div class="ic" style="margin:0">${svg('clock')}</div><div style="flex:1"><b style="font-size:15px">บันทึก OT</b><span class="s" style="display:block">ปฏิทินชั่วโมงล่วงเวลา · ค่า OT เดือนนี้ ${A('thb', otMonthPay())}</span></div></button>
+  <button class="tile rip rise" data-guide="start" style="--i:5;width:100%;min-height:0;margin-bottom:14px;flex-direction:row;align-items:center;gap:12px"><div class="ic" style="margin:0">${svg('chk')}</div><div><b style="font-size:15px">วิธีใช้งาน &amp; วิธี Rebalance</b><span class="s" style="display:block">อ่านสั้นๆ ก่อนเริ่มใช้</span></div></button>
   <div class="note rise" ${rise(5)}>คะแนนนี้เป็นเกณฑ์อย่างง่ายเพื่อดูภาพรวมเท่านั้น ไม่ใช่คำแนะนำทางการเงิน อัปเดตล่าสุด ${dateTh(D.updated)}</div>`;
 };
 
@@ -834,6 +856,7 @@ P.overview = () => {
   return `${dp.length ? `<button class="note warn rise" data-dupes style="display:block;width:100%;text-align:left">พบรายการที่อาจซ้ำ ${dp.length} กลุ่ม — <b>แตะเพื่อตรวจและลบ</b> (มูลค่าพอร์ตอาจสูงเกินจริง)</button>` : ''}
   ${hero('มูลค่าพอร์ตลงทุน', 'mu', C.total, `<div class="meta"><span class="${plU >= 0 ? 'pos' : 'neg'}">${plU >= 0 ? '▲' : '▼'} ${A('smu', plU)} (${A('spct', plPct)})</span><span>ต้นทุน ${S.cur === 'THB' ? A('thb', C.costThb) : A('usd', C.costUsd)}</span><span>FX ${nf(FX, 2)}</span></div>`)}
   ${qbarHtml()}
+  ${snapChartHtml('port', 'มูลค่าพอร์ตย้อนหลัง')}
   <div class="card rise" ${rise(2)}><h3>สัดส่วนพอร์ต</h3>
     <div class="donut-wrap"><div class="donut"><svg viewBox="0 0 120 120" id="donut"></svg><div class="mid"><b id="d-mid">${C.hs.length}</b><small id="d-sub">สินทรัพย์</small></div></div><div class="legend" id="legend"></div></div>
   </div>
@@ -870,7 +893,7 @@ async function fetchQuotes(manual) {
   if (auth && !Object.keys(nq.px).length) { if (manual) toast('API key ไม่ถูกต้อง', false); return render('n'); }
   LQ = nq; store.set('lq', JSON.stringify(LQ));
   if (isReb()) { if (manual) toast('ดึงราคาแล้ว (หน้านี้ยังใช้ราคาที่กรอกเอง)'); return; }
-  const k = view.scrollTop; render('n'); view.scrollTop = k; if (manual) toast(bad ? `ดึงได้ ${D.holdings.length - bad}/${D.holdings.length} ตัว` : 'อัปเดตราคาตลาดแล้ว', !bad);
+  const k = view.scrollTop; render('n'); view.scrollTop = k; saveSnap(true); if (manual) toast(bad ? `ดึงได้ ${D.holdings.length - bad}/${D.holdings.length} ตัว` : 'อัปเดตราคาตลาดแล้ว', !bad);
 }
 function openQuoteSheet() {
   const key = store.get('fhkey', ''), on = store.get('livepx', '1') === '1';
@@ -942,7 +965,7 @@ P.activity = () => {
   const body = Object.keys(g).sort().reverse().map(d => `<div class="dgroup">${dateTh(d)}</div><div class="card" style="padding:4px 16px;margin-bottom:6px">${g[d].map(i => i.html).join('')}</div>`).join('')
     || `<div class="empty"><span class="e">🗒️</span>ยังไม่มีรายการ</div>`;
   return `<div class="seg rise" ${rise(1)}><div class="thumb" style="width:calc((100% - 8px)/3);transform:translateX(${Math.max(0, ASEGS.findIndex(s => s[0] === S.aseg)) * 100}%)"></div>
-    ${ASEGS.map(s => `<button class="${S.aseg === s[0] ? 'on' : ''}" data-aseg="${s[0]}">${s[1]}</button>`).join('')}</div><div class="rise" ${rise(2)}>${body}</div>`;
+    ${ASEGS.map(s => `<button class="${S.aseg === s[0] ? 'on' : ''}" data-aseg="${s[0]}">${s[1]}</button>`).join('')}</div><div class="rise" ${rise(2)}>${S.aseg === 'div' ? divSummaryHtml() : ''}${body}</div>`;
 };
 
 P.tax = () => {
@@ -1020,13 +1043,15 @@ function otCalHtml() {
   let cells = ''; for (let i = 0; i < first; i++) cells += '<i class="cd blank"></i>';
   for (let d = 1; d <= dim; d++) {
     const ds = ymd(y, m, d), l = byDay[ds] || [], h = sumBy(l, otHours), dow = new Date(y, m, d).getDay();
-    cells += `<button class="cd rip ${dow === 0 ? 'sun' : ''} ${dow === 6 ? 'sat' : ''} ${ds === td ? 'today' : ''} ${l.length ? 'has' : ''} ${S.otSel.includes(ds) ? 'sel' : ''}" data-otday="${ds}" style="${l.length ? `--h:${Math.min(1, h / maxH)}` : ''}">
+    cells += `<button class="cd rip ${dow === 0 ? 'sun' : ''} ${dow === 6 ? 'sat' : ''} ${ds === td ? 'today' : ''} ${TH_HOL[ds] ? 'hol' : ''} ${l.length ? 'has' : ''} ${S.otSel.includes(ds) ? 'sel' : ''}" data-otday="${ds}" ${TH_HOL[ds] ? `title="${TH_HOL[ds]}"` : ''} style="${l.length ? `--h:${Math.min(1, h / maxH)}` : ''}">
       <span class="dn">${d}</span>${l.length ? `<span class="dh">${nf(h, h % 1 ? 1 : 0)}<small>ชม.</small></span>` : ''}</button>`;
   }
   return `<div class="calhead"><button class="icon-btn" data-calnav="-1" aria-label="เดือนก่อน">‹</button><b>${TH_MONTHS[m]} ${y + 543}</b><button class="icon-btn" data-calnav="1" aria-label="เดือนถัดไป">›</button></div>
     <div class="cal"><div class="cdow">${TH_DOW.map((d, i) => `<span class="${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${d}</span>`).join('')}</div><div class="cgrid">${cells}</div></div>`;
 }
-const otSelHtml = () => `<div class="selrow"><span>${S.otSel.length ? `เลือกแล้ว <b>${S.otSel.length}</b> วัน: ${S.otSel.slice(0, 6).map(d => +d.slice(8)).join(', ')}${S.otSel.length > 6 ? '…' : ''}` : 'แตะวันที่ในปฏิทินเพื่อเลือก (เลือกได้หลายวัน)'}</span></div>
+const otHolHint = () => { const hs = S.otSel.filter(d => TH_HOL[d]); return hs.length ? `<div class="holnote">มีวันหยุดนักขัตฤกษ์ในวันที่เลือก: ${hs.slice(0, 3).map(d => +d.slice(8) + ' ' + TH_HOL[d]).join(', ')}${hs.length > 3 ? '…' : ''} · ปกติคิด 3 เท่า <button class="fchip" data-otrate="3">ใช้ 3.0x</button></div>` : ''; };
+const otHolList = () => { const ym = `${S.calY}-${p2(S.calM + 1)}`, l = Object.keys(TH_HOL).filter(d => d.startsWith(ym)); return l.length ? `<div class="hollist"><i></i> ${l.map(d => +d.slice(8) + ' ' + TH_HOL[d]).join(' · ')}</div>` : ''; };
+const otSelHtml = () => `${otHolList()}<div class="selrow"><span>${S.otSel.length ? `เลือกแล้ว <b>${S.otSel.length}</b> วัน: ${S.otSel.slice(0, 6).map(d => +d.slice(8)).join(', ')}${S.otSel.length > 6 ? '…' : ''}` : 'แตะวันที่ในปฏิทินเพื่อเลือก (เลือกได้หลายวัน)'}</span></div>${otHolHint()}
   <div class="quick" style="margin-top:8px"><button class="fchip" data-otquick="wd">จ–ศ ทั้งเดือน</button><button class="fchip" data-otquick="we">ส–อา ทั้งเดือน</button><button class="fchip" data-otquick="clr">ล้าง</button></div>`;
 const otRatesHtml = () => `<div class="ratechips">${OT_CHIPS.map(([v, a, b]) => `<button class="rc ${S.otF.rate === v ? 'on' : ''}" data-otrate="${v}"><b>${a}</b><small>${b}</small></button>`).join('')}</div>
   ${S.otF.rate === 'custom' ? `<label style="display:block;margin-top:10px;font-size:12px;color:var(--muted);font-weight:600">อัตรา (เท่า)<input class="inp" data-otf="cr" type="number" step="any" inputmode="decimal" value="${S.otF.cr}" placeholder="เช่น 2.5"></label>` : ''}`;
@@ -1145,7 +1170,7 @@ function go(target) {
   const [tab, seg] = String(target).split(':');
   if (seg) S.pseg = seg;
   if (tab === S.tab && !seg) return;
-  const dir = (tab === 'ot' || S.tab === 'ot') ? 'n' : NAVIDX[tab] > NAVIDX[S.tab] ? 'r' : NAVIDX[tab] < NAVIDX[S.tab] ? 'l' : 'n';
+  const dir = (tab === 'ot' || S.tab === 'ot' || tab === 'cash' || S.tab === 'cash') ? 'n' : NAVIDX[tab] > NAVIDX[S.tab] ? 'r' : NAVIDX[tab] < NAVIDX[S.tab] ? 'l' : 'n';
   S.tab = tab; buzz(); render(dir);
 }
 function refreshSim() {
@@ -1266,9 +1291,10 @@ function openGuide(sec = 'start') {
 const MENU = [
   ['trade', 'trade', 'ซื้อ/ขายหุ้น', 'บันทึกรายการลงทุน'], ['div', 'div', 'ปันผล', 'รับปันผลหุ้น'], ['cash', 'cash', 'เงินเข้า/ออกพอร์ต', 'แลก FX / โอนกลับ'],
   ['move', 'move', 'ฝาก/ถอนเงินเก็บ', 'เพิ่มหรือลดเงินเก็บ'], ['pay', 'pay', 'จ่ายหนี้', 'บันทึกการผ่อนชำระ'], ['acct', 'acct', 'เพิ่มหมวดเงินเก็บ', 'สำรอง/ออม/เป้าหมาย'],
-  ['debt', 'debt', 'เพิ่มหนี้', 'สัญญา/บัตรใหม่'], ['ot', 'clock', 'บันทึก OT', 'ชั่วโมงล่วงเวลา · ค่า OT'], ['holdings', 'pie', 'จัดการหุ้น', 'เพิ่ม/ลดหุ้น · เป้า %'], ['settings', 'set', 'ตั้งค่า', 'FX · รายได้ · รายจ่าย']
+  ['debt', 'debt', 'เพิ่มหนี้', 'สัญญา/บัตรใหม่'], ['ot', 'clock', 'บันทึก OT', 'ชั่วโมงล่วงเวลา · ค่า OT'], ['income', 'cash', 'รายรับ', 'แบ่งเข้ากระปุก'], ['exp', 'pay', 'รายจ่าย', 'หักจากกระปุก'], ['potmove', 'move', 'ย้ายเงินกระปุก', 'ระหว่างหมวด'], ['pot', 'acct', 'เพิ่มกระปุก', 'หมวดแบ่งเงิน'],
+  ['holdings', 'pie', 'จัดการหุ้น', 'เพิ่ม/ลดหุ้น · เป้า %'], ['backup', 'shield', 'สำรองข้อมูล', 'ดาวน์โหลด · ซ่อนอัตโนมัติ'], ['settings', 'set', 'ตั้งค่า', 'FX · รายได้ · รายจ่าย']
 ];
-const TAB_FIRST = { home: 'settings', portfolio: 'trade', savings: 'move', debts: 'pay' };
+const TAB_FIRST = { cash: 'income', home: 'settings', portfolio: 'trade', savings: 'move', debts: 'pay' };
 function openMenu() {
   const first = TAB_FIRST[S.tab], list = [...MENU].sort((a, b) => (b[0] === first) - (a[0] === first));
   openSheet(`<h2 class="sh-title">เพิ่มรายการ</h2><div class="menu">${list.map((m, i) => `<button class="mi rip ${m[0] === first ? 'hi' : ''}" style="--i:${i}" data-form="${m[0]}"><div class="ic">${svg(m[1])}</div><div><b>${m[2]}</b><small>${m[3]}</small></div></button>`).join('')}</div>`);
@@ -1287,10 +1313,10 @@ async function prepSym(r) {
   if (!D.holdings.some(h => h.symbol === r.symbol)) await api.insert('dime_holdings', { symbol: r.symbol, target: 0 });
 }
 const syms = () => `<datalist id="syms">${D.holdings.map(h => `<option value="${h.symbol}">`).join('')}</datalist>`;
-const SETUP_SQL = "-- Dime Portfolio v2 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2a\u0e48\u0e27\u0e19 \"\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\" + \"\u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\" + \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49/\u0e23\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22\n-- \u0e23\u0e31\u0e19\u0e15\u0e48\u0e2d\u0e08\u0e32\u0e01 schema.sql (SQL Editor \u2192 New query \u2192 \u0e27\u0e32\u0e07 \u2192 Run) \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49 \u0e44\u0e21\u0e48\u0e17\u0e33\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e40\u0e14\u0e34\u0e21\u0e2b\u0e32\u0e22\n\n-- \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e15\u0e34\u0e21\nalter table public.dime_settings add column if not exists monthly_income_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists monthly_expense_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists emergency_target_months numeric not null default 6;\n\n-- \u0e1a\u0e31\u0e0d\u0e0a\u0e35/\u0e01\u0e49\u0e2d\u0e19\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07 (emergency = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\u0e09\u0e38\u0e01\u0e40\u0e09\u0e34\u0e19, cash = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14\u0e2d\u0e37\u0e48\u0e19\u0e46)\ncreate table if not exists public.dime_accounts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'emergency' check (kind in ('emergency','cash')),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e1d\u0e32\u0e01(+)/\u0e16\u0e2d\u0e19(-) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e02\u0e2d\u0e07\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\ncreate table if not exists public.dime_account_moves (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  account_id bigint not null references public.dime_accounts(id) on delete cascade,\n  move_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\ncreate table if not exists public.dime_debts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'other' check (kind in ('credit_card','personal_loan','car','home','student','other')),\n  principal_thb numeric not null check (principal_thb >= 0),\n  interest_rate numeric not null default 0 check (interest_rate >= 0),   -- % \u0e15\u0e48\u0e2d\u0e1b\u0e35\n  min_payment_thb numeric not null default 0 check (min_payment_thb >= 0), -- \u0e1c\u0e48\u0e2d\u0e19\u0e02\u0e31\u0e49\u0e19\u0e15\u0e48\u0e33\u0e15\u0e48\u0e2d\u0e40\u0e14\u0e37\u0e2d\u0e19\n  due_day int check (due_day between 1 and 31),\n  started_on date,\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\u0e2b\u0e19\u0e35\u0e49 (\u0e04\u0e48\u0e32\u0e1a\u0e27\u0e01 = \u0e25\u0e14\u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49, \u0e04\u0e48\u0e32\u0e25\u0e1a = \u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49\u0e40\u0e1e\u0e34\u0e48\u0e21/\u0e14\u0e2d\u0e01\u0e40\u0e1a\u0e35\u0e49\u0e22\u0e17\u0e1a) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e40\u0e07\u0e34\u0e19\u0e15\u0e49\u0e19 - \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\ncreate table if not exists public.dime_debt_payments (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  debt_id bigint not null references public.dime_debts(id) on delete cascade,\n  pay_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\ncreate index if not exists dime_moves_user_idx    on public.dime_account_moves(user_id, account_id, move_date);\ncreate index if not exists dime_payments_user_idx on public.dime_debt_payments(user_id, debt_id, pay_date);\n\ndo $$\ndeclare t text;\nbegin\n  foreach t in array array['dime_accounts','dime_account_moves','dime_debts','dime_debt_payments'] loop\n    execute format('alter table public.%I enable row level security', t);\n    execute format('drop policy if exists \"owner only\" on public.%I', t);\n    execute format('create policy \"owner only\" on public.%I for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);\n    execute format('revoke all on public.%I from anon', t);\n  end loop;\nend $$;\n\n-- K FINANCE v3 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2b\u0e21\u0e27\u0e14\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a (\u0e40\u0e07\u0e34\u0e19\u0e2d\u0e2d\u0e21/\u0e40\u0e07\u0e34\u0e19\u0e1d\u0e32\u0e01\u0e1b\u0e23\u0e30\u0e08\u0e33/\u0e40\u0e07\u0e34\u0e19\u0e40\u0e1b\u0e49\u0e32\u0e2b\u0e21\u0e32\u0e22/\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14/\u0e2d\u0e37\u0e48\u0e19\u0e46) \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_accounts drop constraint if exists dime_accounts_kind_check;\nalter table public.dime_accounts add constraint dime_accounts_kind_check\n  check (kind in ('emergency','saving','fixed','goal','cash','other'));\n\n-- K FINANCE v4 \u2014 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01 OT (\u0e25\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32) + \u0e40\u0e07\u0e34\u0e19\u0e40\u0e14\u0e37\u0e2d\u0e19 \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_settings add column if not exists monthly_salary_thb numeric not null default 0;\n\ncreate table if not exists public.dime_ot_logs (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  work_date date not null,\n  start_time time not null,\n  end_time time not null,            -- \u0e16\u0e49\u0e32\u0e40\u0e27\u0e25\u0e32\u0e40\u0e25\u0e34\u0e01\u0e19\u0e49\u0e2d\u0e22\u0e01\u0e27\u0e48\u0e32\u0e40\u0e27\u0e25\u0e32\u0e40\u0e23\u0e34\u0e48\u0e21 = \u0e02\u0e49\u0e32\u0e21\u0e40\u0e17\u0e35\u0e48\u0e22\u0e07\u0e04\u0e37\u0e19\n  rate numeric not null default 1.5 check (rate > 0),   -- \u0e40\u0e17\u0e48\u0e32\u0e02\u0e2d\u0e07\u0e04\u0e48\u0e32\u0e08\u0e49\u0e32\u0e07\u0e15\u0e48\u0e2d\u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07\n  note text,\n  created_at timestamptz not null default now()\n);\ncreate index if not exists dime_ot_user_idx on public.dime_ot_logs(user_id, work_date);\n\nalter table public.dime_ot_logs enable row level security;\ndrop policy if exists \"owner only\" on public.dime_ot_logs;\ncreate policy \"owner only\" on public.dime_ot_logs for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);\nrevoke all on public.dime_ot_logs from anon;\n\n-- K FINANCE v5 \u2014 \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e01\u0e32\u0e23\u0e04\u0e34\u0e14 OT: \u0e08\u0e33\u0e19\u0e27\u0e19\u0e27\u0e31\u0e19\u0e17\u0e33\u0e07\u0e32\u0e19/\u0e40\u0e14\u0e37\u0e2d\u0e19 \u0e41\u0e25\u0e30\u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07/\u0e27\u0e31\u0e19 \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_settings add column if not exists ot_days_per_month numeric not null default 30;\nalter table public.dime_settings add column if not exists ot_hours_per_day numeric not null default 8;\n";
+const SETUP_SQL = "-- Dime Portfolio v2 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2a\u0e48\u0e27\u0e19 \"\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\" + \"\u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\" + \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49/\u0e23\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22\n-- \u0e23\u0e31\u0e19\u0e15\u0e48\u0e2d\u0e08\u0e32\u0e01 schema.sql (SQL Editor \u2192 New query \u2192 \u0e27\u0e32\u0e07 \u2192 Run) \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49 \u0e44\u0e21\u0e48\u0e17\u0e33\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e40\u0e14\u0e34\u0e21\u0e2b\u0e32\u0e22\n\n-- \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e15\u0e34\u0e21\nalter table public.dime_settings add column if not exists monthly_income_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists monthly_expense_thb numeric not null default 0;\nalter table public.dime_settings add column if not exists emergency_target_months numeric not null default 6;\n\n-- \u0e1a\u0e31\u0e0d\u0e0a\u0e35/\u0e01\u0e49\u0e2d\u0e19\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07 (emergency = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e33\u0e23\u0e2d\u0e07\u0e09\u0e38\u0e01\u0e40\u0e09\u0e34\u0e19, cash = \u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14\u0e2d\u0e37\u0e48\u0e19\u0e46)\ncreate table if not exists public.dime_accounts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'emergency' check (kind in ('emergency','cash')),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e1d\u0e32\u0e01(+)/\u0e16\u0e2d\u0e19(-) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e02\u0e2d\u0e07\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\ncreate table if not exists public.dime_account_moves (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  account_id bigint not null references public.dime_accounts(id) on delete cascade,\n  move_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e2b\u0e19\u0e35\u0e49\u0e2a\u0e34\u0e19\ncreate table if not exists public.dime_debts (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  kind text not null default 'other' check (kind in ('credit_card','personal_loan','car','home','student','other')),\n  principal_thb numeric not null check (principal_thb >= 0),\n  interest_rate numeric not null default 0 check (interest_rate >= 0),   -- % \u0e15\u0e48\u0e2d\u0e1b\u0e35\n  min_payment_thb numeric not null default 0 check (min_payment_thb >= 0), -- \u0e1c\u0e48\u0e2d\u0e19\u0e02\u0e31\u0e49\u0e19\u0e15\u0e48\u0e33\u0e15\u0e48\u0e2d\u0e40\u0e14\u0e37\u0e2d\u0e19\n  due_day int check (due_day between 1 and 31),\n  started_on date,\n  note text,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\u0e2b\u0e19\u0e35\u0e49 (\u0e04\u0e48\u0e32\u0e1a\u0e27\u0e01 = \u0e25\u0e14\u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49, \u0e04\u0e48\u0e32\u0e25\u0e1a = \u0e22\u0e2d\u0e14\u0e2b\u0e19\u0e35\u0e49\u0e40\u0e1e\u0e34\u0e48\u0e21/\u0e14\u0e2d\u0e01\u0e40\u0e1a\u0e35\u0e49\u0e22\u0e17\u0e1a) \u2014 \u0e22\u0e2d\u0e14\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d = \u0e40\u0e07\u0e34\u0e19\u0e15\u0e49\u0e19 - \u0e1c\u0e25\u0e23\u0e27\u0e21\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\ncreate table if not exists public.dime_debt_payments (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  debt_id bigint not null references public.dime_debts(id) on delete cascade,\n  pay_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  note text,\n  created_at timestamptz not null default now()\n);\n\ncreate index if not exists dime_moves_user_idx    on public.dime_account_moves(user_id, account_id, move_date);\ncreate index if not exists dime_payments_user_idx on public.dime_debt_payments(user_id, debt_id, pay_date);\n\ndo $$\ndeclare t text;\nbegin\n  foreach t in array array['dime_accounts','dime_account_moves','dime_debts','dime_debt_payments'] loop\n    execute format('alter table public.%I enable row level security', t);\n    execute format('drop policy if exists \"owner only\" on public.%I', t);\n    execute format('create policy \"owner only\" on public.%I for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);\n    execute format('revoke all on public.%I from anon', t);\n  end loop;\nend $$;\n\n-- K FINANCE v3 \u2014 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e2b\u0e21\u0e27\u0e14\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a (\u0e40\u0e07\u0e34\u0e19\u0e2d\u0e2d\u0e21/\u0e40\u0e07\u0e34\u0e19\u0e1d\u0e32\u0e01\u0e1b\u0e23\u0e30\u0e08\u0e33/\u0e40\u0e07\u0e34\u0e19\u0e40\u0e1b\u0e49\u0e32\u0e2b\u0e21\u0e32\u0e22/\u0e40\u0e07\u0e34\u0e19\u0e2a\u0e14/\u0e2d\u0e37\u0e48\u0e19\u0e46) \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_accounts drop constraint if exists dime_accounts_kind_check;\nalter table public.dime_accounts add constraint dime_accounts_kind_check\n  check (kind in ('emergency','saving','fixed','goal','cash','other'));\n\n-- K FINANCE v4 \u2014 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01 OT (\u0e25\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32) + \u0e40\u0e07\u0e34\u0e19\u0e40\u0e14\u0e37\u0e2d\u0e19 \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_settings add column if not exists monthly_salary_thb numeric not null default 0;\n\ncreate table if not exists public.dime_ot_logs (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  work_date date not null,\n  start_time time not null,\n  end_time time not null,            -- \u0e16\u0e49\u0e32\u0e40\u0e27\u0e25\u0e32\u0e40\u0e25\u0e34\u0e01\u0e19\u0e49\u0e2d\u0e22\u0e01\u0e27\u0e48\u0e32\u0e40\u0e27\u0e25\u0e32\u0e40\u0e23\u0e34\u0e48\u0e21 = \u0e02\u0e49\u0e32\u0e21\u0e40\u0e17\u0e35\u0e48\u0e22\u0e07\u0e04\u0e37\u0e19\n  rate numeric not null default 1.5 check (rate > 0),   -- \u0e40\u0e17\u0e48\u0e32\u0e02\u0e2d\u0e07\u0e04\u0e48\u0e32\u0e08\u0e49\u0e32\u0e07\u0e15\u0e48\u0e2d\u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07\n  note text,\n  created_at timestamptz not null default now()\n);\ncreate index if not exists dime_ot_user_idx on public.dime_ot_logs(user_id, work_date);\n\nalter table public.dime_ot_logs enable row level security;\ndrop policy if exists \"owner only\" on public.dime_ot_logs;\ncreate policy \"owner only\" on public.dime_ot_logs for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);\nrevoke all on public.dime_ot_logs from anon;\n\n-- K FINANCE v5 \u2014 \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e01\u0e32\u0e23\u0e04\u0e34\u0e14 OT: \u0e08\u0e33\u0e19\u0e27\u0e19\u0e27\u0e31\u0e19\u0e17\u0e33\u0e07\u0e32\u0e19/\u0e40\u0e14\u0e37\u0e2d\u0e19 \u0e41\u0e25\u0e30\u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07/\u0e27\u0e31\u0e19 \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\nalter table public.dime_settings add column if not exists ot_days_per_month numeric not null default 30;\nalter table public.dime_settings add column if not exists ot_hours_per_day numeric not null default 8;\n\n-- K FINANCE v6 \u2014 \u0e23\u0e32\u0e22\u0e23\u0e31\u0e1a/\u0e23\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22\u0e41\u0e1a\u0e1a\u0e01\u0e23\u0e30\u0e1b\u0e38\u0e01 (\u0e41\u0e1a\u0e48\u0e07\u0e40\u0e07\u0e34\u0e19\u0e40\u0e02\u0e49\u0e32\u0e41\u0e15\u0e48\u0e25\u0e30\u0e2b\u0e21\u0e27\u0e14) \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\ncreate table if not exists public.dime_pots (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  name text not null,\n  emoji text not null default '\ud83d\udcb0',\n  split_pct numeric not null default 0 check (split_pct >= 0),   -- \u0e2a\u0e31\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e41\u0e1a\u0e48\u0e07\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 (%)\n  sort_order int not null default 0,\n  created_at timestamptz not null default now()\n);\n\n-- \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e40\u0e02\u0e49\u0e32(+)/\u0e2d\u0e2d\u0e01(-) \u0e02\u0e2d\u0e07\u0e01\u0e23\u0e30\u0e1b\u0e38\u0e01  kind: income = \u0e41\u0e1a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e23\u0e31\u0e1a\u0e40\u0e02\u0e49\u0e32, expense = \u0e23\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22, move = \u0e22\u0e49\u0e32\u0e22\u0e23\u0e30\u0e2b\u0e27\u0e48\u0e32\u0e07\u0e01\u0e23\u0e30\u0e1b\u0e38\u0e01\ncreate table if not exists public.dime_pot_moves (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  pot_id bigint not null references public.dime_pots(id) on delete cascade,\n  move_date date not null default current_date,\n  amount_thb numeric not null check (amount_thb <> 0),\n  kind text not null default 'expense' check (kind in ('income','expense','move')),\n  note text,\n  created_at timestamptz not null default now()\n);\ncreate index if not exists dime_pot_moves_idx on public.dime_pot_moves(user_id, pot_id, move_date);\n\ndo $$\ndeclare t text;\nbegin\n  foreach t in array array['dime_pots','dime_pot_moves'] loop\n    execute format('alter table public.%I enable row level security', t);\n    execute format('drop policy if exists \"owner only\" on public.%I', t);\n    execute format('create policy \"owner only\" on public.%I for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);\n    execute format('revoke all on public.%I from anon', t);\n  end loop;\nend $$;\n\n-- K FINANCE v7 \u2014 \u0e40\u0e01\u0e47\u0e1a\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e1e\u0e2d\u0e23\u0e4c\u0e15/\u0e17\u0e23\u0e31\u0e1e\u0e22\u0e4c\u0e2a\u0e34\u0e19\u0e2a\u0e38\u0e17\u0e18\u0e34\u0e23\u0e32\u0e22\u0e27\u0e31\u0e19 \u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e01\u0e23\u0e32\u0e1f\u0e22\u0e49\u0e2d\u0e19\u0e2b\u0e25\u0e31\u0e07 \u2014 \u0e23\u0e31\u0e19\u0e43\u0e19 SQL Editor \u0e23\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e44\u0e14\u0e49\ncreate table if not exists public.dime_snapshots (\n  id bigint generated always as identity primary key,\n  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,\n  snap_date date not null,\n  portfolio_thb numeric not null default 0,\n  net_worth_thb numeric not null default 0,\n  created_at timestamptz not null default now(),\n  unique (user_id, snap_date)\n);\nalter table public.dime_snapshots enable row level security;\ndrop policy if exists \"owner only\" on public.dime_snapshots;\ncreate policy \"owner only\" on public.dime_snapshots for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);\nrevoke all on public.dime_snapshots from anon;\n\n";
 function openSetup() {
   openSheet(`<h2 class="sh-title">ต้องสร้างตารางใน Supabase ก่อน</h2>
-    <div class="note">ส่วนเงินออม/หนี้สินยังไม่มีตารางในฐานข้อมูล ทำครั้งเดียว:<br>1) กด <b>คัดลอก SQL</b> ด้านล่าง<br>2) เปิด Supabase → <b>SQL Editor</b> → New query → วางแล้วกด <b>Run</b><br>3) กลับมาที่แอป ลากหน้าจอลงเพื่อรีเฟรช แล้วเพิ่มเงินเก็บได้เลย</div>
+    <div class="note">ฟีเจอร์นี้ยังไม่มีตารางในฐานข้อมูล ทำครั้งเดียว:<br>1) กด <b>คัดลอก SQL</b> ด้านล่าง<br>2) เปิด Supabase → <b>SQL Editor</b> → New query → วางแล้วกด <b>Run</b><br>3) กลับมาที่แอป ลากหน้าจอลงเพื่อรีเฟรช แล้วเพิ่มเงินเก็บได้เลย</div>
     <button class="btn" style="width:100%;margin-bottom:12px" id="copysql">คัดลอก SQL</button>
     <pre class="sqlbox" id="sqlbox"></pre>`);
   $('#sqlbox').textContent = SETUP_SQL;
@@ -1299,7 +1325,7 @@ function openSetup() {
     catch { const r = document.createRange(); r.selectNodeContents($('#sqlbox')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('เลือก SQL แล้ว กดคัดลอกเอง', false); }
   });
 }
-const needTables = k => { if (k === 'ot' ? D.needsOt : D.needsMigration) { openSetup(); return true; } return false; };
+const needTables = k => { if (k === 'ot' ? D.needsOt : k === 'pots' ? D.needsPots : D.needsMigration) { openSetup(); return true; } return false; };
 const HOURS = Array.from({ length: 24 }, (_, i) => [p2(i), p2(i) + ' น.']), MINS = Array.from({ length: 12 }, (_, i) => [p2(i * 5), p2(i * 5) + ' นาที']);
 const FORMS = {
   trade: o => ({ title: 'ซื้อ/ขายหุ้น', table: 'dime_trades', prep: prepSym, map: r => { if (r.action !== 'SELL') r.cost_basis_usd = null; return r; }, extra: `<div class="note full">จำนวนหุ้น = 0 คือการอัปเดต “ราคาล่าสุด” โดยไม่ซื้อขาย (เหมือนใน Excel)</div>`, fields: [
@@ -1351,6 +1377,24 @@ const FORMS = {
         $('#otprev').innerHTML = `${tclock(`${g('start_h')}:${g('start_m')}`)} – ${tclock(`${g('end_h')}:${g('end_m')}`)}${nx ? ' (ข้ามเที่ยงคืน)' : ''} = <b>${fmtH(hrs)}</b>` + (D.settings.salary && rate > 0 ? ` · ค่า OT ≈ <b>${thb(hourly() * rate * hrs)}</b>` : ' · <b>ตั้งเงินเดือนก่อน</b> เพื่อคำนวณค่า OT'); };
       const cl = $('#lbl-custom_rate'); const tg = () => { cl.hidden = f.elements.rate.value !== 'custom'; };
       f.addEventListener('input', () => { tg(); upd(); }); tg(); upd(); } }),
+  exp: o => ({ title: 'บันทึกรายจ่าย', need: 'pots', table: 'dime_pot_moves', guard: () => D.pots.length ? null : 'ยังไม่มีกระปุก — สร้างกระปุกก่อน', fields: [
+    { name: 'pot_id', label: 'หมวด/กระปุก', type: 'select', options: D.pots.map(p => [p.id, `${p.emoji} ${p.name} (${nf(p.balance, 0)})`]), value: o.id, full: 1 },
+    { name: 'amount', label: 'จำนวน (บาท)', type: 'number', req: 1 }, { name: 'move_date', label: 'วันที่', type: 'date', value: today(), req: 1 }, { name: 'note', label: 'รายการ', full: 1, ph: 'เช่น ข้าวเที่ยง, ค่าแท็กซี่' }],
+    run: r => api.insert('dime_pot_moves', { pot_id: +r.pot_id, move_date: r.move_date, amount_thb: -Math.abs(r.amount), kind: 'expense', note: r.note }) }),
+  potmove: o => ({ title: 'ย้ายเงินระหว่างกระปุก', need: 'pots', guard: () => D.pots.length > 1 ? null : 'ต้องมีอย่างน้อย 2 กระปุก', fields: [
+    { name: 'from', label: 'จากกระปุก', type: 'select', options: D.pots.map(p => [p.id, `${p.emoji} ${p.name} (${nf(p.balance, 0)})`]), value: o.id || (D.pots[0] && D.pots[0].id) },
+    { name: 'to', label: 'ไปกระปุก', type: 'select', options: D.pots.map(p => [p.id, `${p.emoji} ${p.name}`]), value: (D.pots.find(p => String(p.id) !== String(o.id || (D.pots[0] && D.pots[0].id))) || {}).id },
+    { name: 'amount', label: 'จำนวน (บาท)', type: 'number', req: 1 }, { name: 'move_date', label: 'วันที่', type: 'date', value: today(), req: 1 }],
+    run: async r => { if (r.from === r.to) throw new Error('เลือกกระปุกต้นทางและปลายทางให้ต่างกัน'); const a = Math.abs(r.amount), f = potById(r.from), t = potById(r.to);
+      await api.insertMany('dime_pot_moves', [{ pot_id: f.id, move_date: r.move_date, amount_thb: -a, kind: 'move', note: 'ย้ายไป ' + t.name }, { pot_id: t.id, move_date: r.move_date, amount_thb: a, kind: 'move', note: 'ย้ายจาก ' + f.name }]); } }),
+  pot: () => ({ title: 'เพิ่มกระปุก', need: 'pots', table: 'dime_pots', map: r => ({ name: r.name, emoji: r.emoji || '💰', split_pct: r.split_pct || 0 }),
+    extra: `<div class="note full">สัดส่วน % ใช้แบ่งรายรับอัตโนมัติ (รวมทุกกระปุกไม่จำเป็นต้อง 100% แต่ปรับยอดตอนแบ่งได้เสมอ)</div>`, fields: [
+    { name: 'name', label: 'ชื่อกระปุก', req: 1, full: 1, ph: 'เช่น กินใช้ / ท่องเที่ยว' }, { name: 'emoji', label: 'ไอคอน (อีโมจิ)', value: '💰', ph: '🍜' }, { name: 'split_pct', label: 'สัดส่วนแบ่ง %', type: 'number', value: 0 },
+    { name: 'opening', label: 'ยอดเริ่มต้น (บาท)', type: 'number', value: 0, full: 1 }],
+    run: async r => { const p = await api.insert('dime_pots', { name: r.name, emoji: r.emoji || '💰', split_pct: r.split_pct || 0, sort_order: D.pots.length }); if (r.opening > 0) await api.insert('dime_pot_moves', { pot_id: p.id, move_date: today(), amount_thb: r.opening, kind: 'income', note: 'ยอดเริ่มต้น' }); } }),
+  pm: () => ({ title: 'แก้ไขรายการกระปุก', need: 'pots', table: 'dime_pot_moves', map: r => ({ pot_id: +r.pot_id, move_date: r.move_date, amount_thb: r.amount_thb, note: r.note }), fields: [
+    { name: 'pot_id', label: 'กระปุก', type: 'select', options: D.pots.map(p => [p.id, `${p.emoji} ${p.name}`]), full: 1 }, { name: 'amount_thb', label: 'จำนวน (+เข้า / −ออก)', type: 'number', req: 1 },
+    { name: 'move_date', label: 'วันที่', type: 'date', req: 1 }, { name: 'note', label: 'รายการ', full: 1 }], run: () => { throw new Error('ใช้แก้ไขเท่านั้น'); } }),
   otset: () => ({ title: 'ตั้งเงินเดือน', need: 'ot', extra: `<div class="note full">ใช้คำนวณค่าจ้างต่อชั่วโมง = เงินเดือน ÷ 30 ÷ 8 สำหรับค่า OT</div>`, fields: [
     { name: 'monthly_salary_thb', label: 'เงินเดือน (บาท/เดือน)', type: 'number', value: D.settings.salary || '', req: 1, full: 1 }], run: r => api.upsertSettings({ monthly_salary_thb: r.monthly_salary_thb }) }),
   settings: () => ({ title: 'ตั้งค่า', need: 1, extra: `<div class="note full">รายได้/รายจ่ายใช้คำนวณเป้าเงินสำรอง (รายจ่าย × จำนวนเดือน) และคะแนนสุขภาพการเงิน</div>`, fields: [
@@ -1359,7 +1403,7 @@ const FORMS = {
     { name: 'contribution_thb', label: 'เงินลงทุนใหม่ตั้งต้น (บาท)', type: 'number', value: D.contributionThb, full: 1 }],
     run: r => api.upsertSettings(r) })
 };
-const EDIT_TITLE = { ot: 'แก้ไข OT', trade: 'แก้ไขรายการซื้อ/ขาย', div: 'แก้ไขปันผล', cash: 'แก้ไขเงินเข้า/ออกพอร์ต', move: 'แก้ไขรายการฝาก/ถอน', acct: 'แก้ไขบัญชี', debt: 'แก้ไขหนี้', pay: 'แก้ไขการจ่ายหนี้' };
+const EDIT_TITLE = { ot: 'แก้ไข OT', trade: 'แก้ไขรายการซื้อ/ขาย', div: 'แก้ไขปันผล', cash: 'แก้ไขเงินเข้า/ออกพอร์ต', move: 'แก้ไขรายการฝาก/ถอน', pm: 'แก้ไขรายการกระปุก', pot: 'แก้ไขกระปุก', acct: 'แก้ไขบัญชี', debt: 'แก้ไขหนี้', pay: 'แก้ไขการจ่ายหนี้' };
 function findRec(kind, id) {
   id = +id;
   if (kind === 'trade') { const t = D.trades.find(x => x.id === id); return t && { o: {}, rec: { trade_date: t.date, symbol: t.symbol, action: t.action, shares: t.shares, price_usd: t.price, fees_usd: t.fees, fx: t.fx, cost_basis_usd: t.cost, notes: t.note } }; }
@@ -1369,12 +1413,16 @@ function findRec(kind, id) {
   if (kind === 'debt') { const d = D.debts.find(x => x.id === id); return d && { o: {}, rec: { name: d.name, kind: d.kind, principal_thb: d.principal, interest_rate: d.rate, min_payment_thb: d.minPay, due_day: d.dueDay, started_on: d.startedOn, note: d.note } }; }
   if (kind === 'ot') { const x = D.ot.find(o => o.id === id); if (!x) return null; const [sh, sm] = x.start.split(':'), [eh, em] = x.end.split(':'), known = OT_RATES.some(r => r[0] === String(x.rate));
     return { o: {}, rec: { work_date: x.date, start_h: sh, start_m: sm, end_h: eh, end_m: em, rate: known ? String(x.rate) : 'custom', custom_rate: known ? '' : x.rate, note: x.note } }; }
+  if (kind === 'pot') { const q = potById(id); return q && { o: {}, rec: { name: q.name, emoji: q.emoji, split_pct: q.pct } }; }
+  if (kind === 'pm') for (const q of D.pots) { const m = q.moves.find(x => x.id === id); if (m) return { o: {}, rec: { pot_id: q.id, amount_thb: m.amount, move_date: m.date, note: m.note } }; }
   if (kind === 'move') for (const a of D.accounts) { const m = a.moves.find(x => x.id === id); if (m) return { o: { id: a.id }, rec: { account_id: a.id, dir: m.amount < 0 ? 'out' : 'in', amount: Math.abs(m.amount), move_date: m.date, note: m.note } }; }
   if (kind === 'pay') for (const d of D.debts) { const p = d.payments.find(x => x.id === id); if (p) return { o: { id: d.id }, rec: { debt_id: d.id, amount_thb: p.amount, pay_date: p.date, note: p.note } }; }
   return null;
 }
 function openForm(kind, o = {}) {
   if (kind === 'holdings') return openHoldings();
+  if (kind === 'income') return openIncome();
+  if (kind === 'backup') return openBackup();
   const edit = o.edit ? findRec(kind, o.edit) : null;
   if (o.edit && !edit) { toast('ไม่พบรายการ', false); return; }
   const F = FORMS[kind](edit ? edit.o : o), editing = !!edit;
@@ -1382,7 +1430,7 @@ function openForm(kind, o = {}) {
   const g = !editing && F.guard && F.guard(); if (g) { toast(g, false); return; }
   let fields = F.fields;
   if (editing) fields = fields.filter(f => f.name !== 'opening').map(f => ({ ...f, value: edit.rec[f.name] ?? f.value }));
-  const warn = kind === 'acct' ? 'ลบบัญชีนี้จะลบประวัติฝาก/ถอนทั้งหมดของบัญชีด้วย' : kind === 'debt' ? 'ลบหนี้นี้จะลบประวัติการจ่ายทั้งหมดของหนี้ด้วย' : '';
+  const warn = kind === 'acct' ? 'ลบบัญชีนี้จะลบประวัติฝาก/ถอนทั้งหมดของบัญชีด้วย' : kind === 'debt' ? 'ลบหนี้นี้จะลบประวัติการจ่ายทั้งหมดของหนี้ด้วย' : kind === 'pot' ? 'ลบกระปุกนี้จะลบประวัติรายการทั้งหมดของกระปุกด้วย' : '';
   openSheet(`<h2 class="sh-title">${editing ? EDIT_TITLE[kind] : F.title}</h2><form id="addform" class="form">${editing ? '' : F.extra || ''}${fields.map(fld).join('')}<button class="btn full" type="submit">บันทึก</button>
     ${editing ? `<button type="button" class="btn ghost full" id="delbtn" style="color:var(--down)">ลบรายการนี้</button>${warn ? `<div class="note warn full">${warn}</div>` : ''}` : ''}</form>`);
   $('#add').classList.remove('open');
@@ -1395,7 +1443,9 @@ function openForm(kind, o = {}) {
     del.addEventListener('click', async () => {
       if (!armed) { armed = true; del.textContent = 'กดอีกครั้งเพื่อยืนยันลบ'; del.style.background = 'rgba(255,45,70,.2)'; setTimeout(() => { armed = false; del.textContent = 'ลบรายการนี้'; del.style.background = ''; }, 3500); return; }
       del.disabled = true;
-      try { await api.remove(F.table, o.edit); await done('ลบแล้ว'); } catch (err) { del.disabled = false; toast('ผิดพลาด: ' + (err.message || err), false); }
+      try { const rows = await api.remove(F.table, o.edit), rec = rows && rows[0]; closeSheet(); await refresh(true);
+        if (rec && !NOUNDO.includes(F.table)) toast('ลบแล้ว', true, { label: 'ย้อนกลับ', fn: async () => { const row = { ...rec }; ['id', 'created_at', 'user_id', ...(GEN[F.table] || [])].forEach(k => delete row[k]); try { await api.insert(F.table, row); await refresh(true); toast('กู้คืนแล้ว'); } catch (e2) { toast('กู้คืนไม่สำเร็จ: ' + (e2.message || e2), false); } } });
+        else toast('ลบแล้ว'); } catch (err) { del.disabled = false; toast('ผิดพลาด: ' + (err.message || err), false); }
     });
   }
   $('#addform').addEventListener('submit', async e => {
@@ -1447,6 +1497,7 @@ function openHoldings() {
     try { await api.remove('dime_holdings', h.id); await fin2('ลบ ' + h.symbol + ' แล้ว'); } catch (err) { toast('ผิดพลาด: ' + (err.message || err), false); }
   }); });
 }
+const NOUNDO = ['dime_accounts', 'dime_debts', 'dime_pots'], GEN = { dime_trades: ['gross_usd', 'net_usd', 'net_thb', 'realized_usd', 'realized_thb'], dime_cashflow: ['fx'], dime_dividends: ['net_usd', 'gross_thb', 'tax_thb', 'net_thb'] };
 function errMsg(err) {
   const m = String(err.message || err);
   if (/check constraint|dime_accounts_kind_check/i.test(m)) return 'ต้องรัน schema_v3.sql ใน Supabase ก่อน จึงจะใช้หมวดนี้ได้';
@@ -1465,6 +1516,15 @@ function onClick(e) {
   if (q('#sal-save')) return otSalarySave();
   if ((el = q('[data-otcopy]'))) return otCopy(el.dataset.otcopy);
   if ((el = q('[data-calnav]'))) { const k = +el.dataset.calnav; if (!k) { S.calY = new Date().getFullYear(); S.calM = new Date().getMonth(); } else { S.calM += k; if (S.calM < 0) { S.calM = 11; S.calY--; } if (S.calM > 11) { S.calM = 0; S.calY++; } } return otUpdate(true); }
+  if ((el = q('[data-pot]'))) return openPot(el.dataset.pot);
+  if ((el = q('[data-cmnav]'))) { S.cmM += +el.dataset.cmnav; if (S.cmM < 0) { S.cmM = 11; S.cmY--; } if (S.cmM > 11) { S.cmM = 0; S.cmY++; } const k = view.scrollTop; render('n'); view.scrollTop = k; return; }
+  if (q('[data-seedpots]')) return seedPots();
+  if (q('#in-auto')) { INC.touched = false; return incSplit(); }
+  if (q('#in-save')) return incSave();
+  if ((el = q('[data-bk]'))) return doBackup(el.dataset.bk);
+  if (q('[data-autohide]')) { store.set('autohide', store.get('autohide', '1') === '1' ? '0' : '1'); return openBackup(); }
+  if ((el = q('[data-snapr]'))) { S.snapR = el.dataset.snapr; const k = view.scrollTop; render('n'); view.scrollTop = k; return; }
+  if ((el = q('[data-divy]'))) { S.divY = +el.dataset.divy; const k = view.scrollTop; render('n'); view.scrollTop = k; return; }
   if (q('[data-qfetch]')) return fetchQuotes(true);
   if (q('[data-qset]')) return openQuoteSheet();
   if (q('#q-save')) { const v = $('#q-key').value.trim(); if (!v) return toast('วาง API key ก่อน', false); store.set('fhkey', v); store.set('livepx', '1'); LQ.at = 0; closeSheet(); return fetchQuotes(true); }
@@ -1513,9 +1573,10 @@ $('#btn-cur').addEventListener('click', () => { S.cur = S.cur === 'THB' ? 'USD' 
 const applyHide = () => { document.body.classList.toggle('hide', S.hide); $('#btn-eye').classList.toggle('on', S.hide); };
 $('#btn-eye').addEventListener('click', () => { S.hide = !S.hide; store.set('hide', S.hide ? '1' : '0'); applyHide(); closeSheet(); { const k = view.scrollTop; render('n'); view.scrollTop = k; } toast(S.hide ? 'ซ่อนตัวเลขแล้ว' : 'แสดงตัวเลขแล้ว'); });
 if (api) { $('#btn-out').hidden = false; $('#btn-out').addEventListener('click', () => api.signOut()); }
-let tt; function toast(m, ok = true) {
-  const t = $('#toast'); t.innerHTML = (ok ? `<span class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>` : '') + `<span></span>`; t.lastChild.textContent = m;
-  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1900);
+let tt; function toast(m, ok = true, act) {
+  const t = $('#toast'); t.innerHTML = (ok ? `<span class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span>` : '') + `<span></span>` + (act ? `<button class="tact">${act.label}</button>` : ''); t.children[ok ? 1 : 0].textContent = m;
+  t.classList.toggle('act', !!act); if (act) t.querySelector('.tact').onclick = () => { t.classList.remove('show'); act.fn(); };
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), act ? 7000 : 1900);
 }
 document.addEventListener('pointerdown', e => {   // ripple
   const el = e.target.closest('.rip'); if (!el || reduced) return;
@@ -1535,14 +1596,178 @@ document.addEventListener('pointerdown', e => {   // ripple
     if (pull > 60) { ptr.classList.add('spin'); ptr.style.transform = 'translateY(50px) scale(1)'; setTimeout(async () => { await refresh(); ptr.classList.remove('spin'); ptr.style.opacity = 0; ptr.style.transform = ''; }, 500); }
     else { ptr.style.opacity = 0; ptr.style.transform = ''; }
     pull = 0;
-    if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && !e.target.closest('.filters,input')) { if (S.tab === 'ot') return; const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) go(TABS[i]); }
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && !e.target.closest('.filters,input')) { if (S.tab === 'ot' || S.tab === 'cash') return; const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) go(TABS[i]); }
   }, { passive: true });
 })();
+
+/* ---------- รายรับ/รายจ่าย (กระปุก) ---------- */
+S.cmY = new Date().getFullYear(); S.cmM = new Date().getMonth(); S.snapR = '90'; S.divY = null;
+const potById = id => D.pots.find(p => p.id === +id);
+const KL = { income: 'รายรับ', expense: 'รายจ่าย', move: 'ย้ายเงิน' };
+const cmKey = () => `${S.cmY}-${p2(S.cmM + 1)}`;
+const potsTotal = () => sumBy(D.pots, p => p.balance);
+function cashMonth() {
+  const ym = cmKey(), rows = [];
+  D.pots.forEach(p => p.moves.forEach(m => { if (m.date.startsWith(ym)) rows.push({ ...m, pot: p }); }));
+  rows.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const inc = sumBy(rows.filter(r => r.kind === 'income'), r => r.amount), exp = 0 - sumBy(rows.filter(r => r.kind === 'expense'), r => r.amount) || 0;
+  const byPot = D.pots.map(p => ({ p, spent: 0 - sumBy(rows.filter(r => r.pot === p && r.kind === 'expense'), r => r.amount) || 0 }));
+  return { rows, inc, exp, byPot };
+}
+const mvRow = m => `<button class="row rip" data-edit="pm:${m.id}"><div class="dot ${m.amount > 0 ? 'g' : 's'}">${m.pot.emoji}</div>
+  <div class="r-main"><b style="font-size:14px">${m.note || KL[m.kind]}</b><small>${dateTh(m.date)} · ${m.pot.name} · ${KL[m.kind]}</small></div><div class="r-side"><b class="${m.amount > 0 ? 'pos' : 'neg'}">${sg(x => thb(x, 0), m.amount)}</b></div></button>`;
+function cashHeroHtml() {
+  const c = cashMonth();
+  return hero('เงินคงเหลือในกระปุกทั้งหมด', 'thb', potsTotal(), `<div class="meta"><span>รับเดือนนี้ ${A('thb', c.inc)}</span><span>จ่ายเดือนนี้ ${A('thb', c.exp)}</span></div>
+    <div class="meta" style="margin-top:8px"><span>${c.inc - c.exp >= 0 ? 'เหลือเก็บ' : 'ใช้เกิน'} ${A('thb', Math.abs(c.inc - c.exp))}</span><span>${c.inc > 0 ? 'ใช้ไป ' + pct(c.exp / c.inc, 0) + ' ของรายรับ' : ''}</span></div>`).replace('rise"', 'rise" style="margin-bottom:14px"');
+}
+V.cash = () => {
+  const c = cashMonth();
+  return `<div class="rise" ${rise(0)} style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="fchip" data-go="home">‹ กลับ</button><button class="fchip" data-form="pot">+ กระปุก</button></div>
+  ${D.needsPots ? `<button class="note warn rise" ${rise(0)} data-setup style="display:block;width:100%;text-align:left">ยังไม่ได้สร้างตารางรายรับ-รายจ่ายใน Supabase — <b>แตะที่นี่เพื่อดู/คัดลอก SQL ที่ต้องรัน</b></button>` : ''}
+  ${cashHeroHtml()}
+  <div class="cashact rise" ${rise(1)}><button class="btn" data-form="income">＋ รายรับ</button><button class="btn ghost" data-form="exp">− รายจ่าย</button><button class="btn ghost" data-form="potmove">⇄ ย้าย</button></div>
+  <div class="card rise" ${rise(2)}><h3>กระปุกของฉัน <small>แตะเพื่อดูรายการ</small></h3>
+    ${D.pots.length ? `<div class="potgrid">${c.byPot.map(({ p, spent }) => { const base = spent + Math.max(p.balance, 0), w = base > 0 ? clamp(spent / base * 100, 0, 100) : 0;
+      return `<button class="pot rip" data-pot="${p.id}"><span class="pe">${p.emoji}</span><b>${p.name}</b><span class="pb num">${thb(p.balance, 0)}</span><div class="meter"><div class="fill" data-w="${w}" style="background:var(--red)"></div></div><small>จ่ายเดือนนี้ ${thb(spent, 0)}${p.pct ? ' · ' + nf(p.pct, 0) + '%' : ''}</small></button>`; }).join('')}</div>`
+      : `<div class="empty"><span class="e">🏺</span>ยังไม่มีกระปุก<br>สร้างกระปุกแล้วแบ่งรายรับเข้าแต่ละหมวด เหมือน Make<br><button class="btn" style="margin-top:14px" data-seedpots>สร้างชุดเริ่มต้น 5 กระปุก</button></div>`}</div>
+  <div class="card rise" ${rise(3)} style="padding:6px 16px"><div class="calhead" style="margin:12px 0"><button class="icon-btn" data-cmnav="-1" aria-label="เดือนก่อน">‹</button><b>${TH_MONTHS[S.cmM]} ${S.cmY + 543}</b><button class="icon-btn" data-cmnav="1" aria-label="เดือนถัดไป">›</button></div>
+    ${c.byPot.some(x => x.spent > 0) ? `<div class="spendbars">${c.byPot.filter(x => x.spent > 0).sort((a, b) => b.spent - a.spent).map(x => `<div class="sb"><span>${x.p.emoji} ${x.p.name}</span><div class="meter"><div class="fill" data-w="${c.exp > 0 ? x.spent / c.exp * 100 : 0}" style="background:var(--red)"></div></div><b>${thb(x.spent, 0)}</b></div>`).join('')}</div>` : ''}
+    ${c.rows.map(mvRow).join('') || '<div class="empty"><span class="e">🧾</span>ยังไม่มีรายการเดือนนี้</div>'}</div>
+  <div class="note rise" ${rise(4)}>กระปุกเป็นการแบ่งเงินสดเพื่อวางแผนใช้จ่าย ไม่ถูกรวมในทรัพย์สินสุทธิ เพื่อไม่ให้นับซ้ำกับหมวดเงินออม</div>`;
+};
+const INC = { touched: false };
+function incSplit() {
+  const amt = parseFloat($('#in-amt').value) || 0, tp = sumBy(D.pots, p => p.pct), ids = D.pots.filter(p => p.pct > 0);
+  let left = amt; ids.forEach((p, i) => { const v = i === ids.length - 1 ? Math.round(left * 100) / 100 : Math.round(amt * p.pct / tp * 100) / 100; left -= v; const el = $(`[data-ia="${p.id}"]`); if (el) el.value = amt ? v : ''; });
+  D.pots.filter(p => !(p.pct > 0)).forEach(p => { const el = $(`[data-ia="${p.id}"]`); if (el) el.value = ''; });
+  incLeft();
+}
+function incLeft() {
+  const amt = parseFloat($('#in-amt').value) || 0, got = $$('[data-ia]', sbody).reduce((s, i) => s + (parseFloat(i.value) || 0), 0), left = Math.round((amt - got) * 100) / 100, el = $('#in-left'); if (!el) return;
+  el.innerHTML = Math.abs(left) < .005 ? (amt ? '<b>แบ่งครบแล้ว ✓</b>' : 'ใส่จำนวนเงินที่ได้รับ') : `${left > 0 ? 'ยังเหลือต้องแบ่ง' : 'แบ่งเกินอยู่'} <b>${thb(Math.abs(left))}</b>`;
+}
+function openIncome() {
+  if (needTables('pots')) return;
+  if (!D.pots.length) { toast('สร้างกระปุกก่อน', false); return openForm('pot'); }
+  INC.touched = false;
+  openSheet(`<h2 class="sh-title">บันทึกรายรับ &amp; แบ่งเข้ากระปุก</h2>
+    <div class="form"><label class="full">จำนวนเงินที่ได้รับ (บาท)<input class="inp" id="in-amt" type="number" step="any" inputmode="decimal" placeholder="เช่น 30000"></label>
+      <label>วันที่<input class="inp" id="in-date" type="date" value="${today()}"></label><label>ที่มา<input class="inp" id="in-note" placeholder="เช่น เงินเดือน"></label></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 2px 8px"><h3 class="gh" style="margin:0">แบ่งเข้ากระปุก</h3><button class="fchip" id="in-auto" type="button">แบ่งตาม %</button></div>
+    ${D.pots.map(p => `<div class="pxrow"><span class="pe">${p.emoji}</span><div class="r-main"><b style="font-size:14px">${p.name}</b><small>${nf(p.pct, 0)}%</small></div><input class="inp pxin" data-ia="${p.id}" type="number" step="any" inputmode="decimal" placeholder="0" aria-label="${p.name}"></div>`).join('')}
+    <div class="selrow" id="in-left" style="margin:12px 0"></div><button class="btn" id="in-save" style="width:100%">บันทึกรายรับ</button>`);
+  $('#add').classList.remove('open'); incLeft();
+  sbody.oninput = e => { const t = e.target; if (t.id === 'in-amt') { if (!INC.touched) incSplit(); else incLeft(); } else if (t.dataset.ia != null) { INC.touched = true; incLeft(); } };
+}
+async function incSave() {
+  const amt = parseFloat($('#in-amt').value) || 0; if (!(amt > 0)) return toast('ใส่จำนวนเงิน', false);
+  const rows = D.pots.map(p => ({ p, v: parseFloat($(`[data-ia="${p.id}"]`).value) || 0 })).filter(x => x.v > 0);
+  const left = Math.round((amt - sumBy(rows, x => x.v)) * 100) / 100; if (Math.abs(left) >= .005) return toast('ยอดที่แบ่งไม่เท่ากับรายรับ', false);
+  const btn = $('#in-save'); btn.disabled = true;
+  try { await api.insertMany('dime_pot_moves', rows.map(x => ({ pot_id: x.p.id, move_date: $('#in-date').value || today(), amount_thb: x.v, kind: 'income', note: $('#in-note').value.trim() || null })));
+    closeSheet(); await refresh(true); toast(`บันทึกรายรับ ${rows.length} กระปุกแล้ว`); } catch (err) { btn.disabled = false; toast(errMsg(err), false); }
+}
+function openPot(id) {
+  const p = potById(id); if (!p) return;
+  const rows = p.moves.slice(0, 40).map(m => mvRow({ ...m, pot: p }));
+  openSheet(`<h2 class="sh-title">${p.emoji} ${p.name}</h2>
+    <div class="card" style="margin-bottom:12px"><div class="lbl" style="font-size:12px;color:var(--muted)">คงเหลือ</div><b class="num" style="font-size:30px">${thb(p.balance)}</b>${p.pct ? `<div style="color:var(--muted);font-size:12.5px;margin-top:4px">สัดส่วนแบ่งรายรับ ${nf(p.pct, 0)}%</div>` : ''}</div>
+    <div class="quick" style="margin-bottom:10px"><button class="fchip on" data-form="exp" data-id="${p.id}">− จ่าย</button><button class="fchip" data-form="potmove" data-id="${p.id}">⇄ ย้ายออก</button><button class="fchip" data-edit="pot:${p.id}">แก้ไขกระปุก</button></div>
+    <div class="card" style="padding:4px 16px">${rows.join('') || '<div class="empty">ยังไม่มีรายการ</div>'}</div>`);
+}
+async function seedPots() {
+  if (needTables('pots')) return;
+  const seed = [['กินใช้', '🍜', 45], ['เดินทาง', '🚗', 10], ['ช้อป/สนุก', '🛍️', 10], ['เงินออม', '🏦', 25], ['ฉุกเฉิน', '🛡️', 10]];
+  try { for (let i = 0; i < seed.length; i++) await api.insert('dime_pots', { name: seed[i][0], emoji: seed[i][1], split_pct: seed[i][2], sort_order: i }); await refresh(true); toast('สร้างกระปุกเริ่มต้นแล้ว — แก้ชื่อ/สัดส่วนได้'); } catch (err) { toast(errMsg(err), false); }
+}
+
+/* ---------- กราฟย้อนหลัง ---------- */
+function snapChartHtml(key, title) {
+  if (D.needsSnap) return `<button class="note warn rise" data-setup style="display:block;width:100%;text-align:left">เปิดกราฟย้อนหลัง: ต้องรัน SQL v7 ใน Supabase — <b>แตะเพื่อดู SQL</b></button>`;
+  const all = D.snaps.map(s => ({ d: s.date, v: s[key] })).filter(p => p.v > 0), cut = S.snapR === 'all' ? '' : new Date(Date.now() - (+S.snapR) * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const pts = all.filter(p => p.d >= cut);
+  const chips = `<div class="quick" style="margin:0">${[['30', '30 วัน'], ['90', '90 วัน'], ['all', 'ทั้งหมด']].map(([v, l]) => `<button class="fchip ${S.snapR === v ? 'on' : ''}" data-snapr="${v}">${l}</button>`).join('')}</div>`;
+  if (pts.length < 2) return `<div class="card rise"><h3>${title}</h3><div class="empty" style="padding:14px 0"><span class="e">📈</span>เริ่มเก็บข้อมูลแล้ว กราฟจะแสดงเมื่อมีข้อมูลอย่างน้อย 2 วัน<br><small style="color:var(--faint)">แอพบันทึกให้อัตโนมัติวันละครั้งเมื่อคุณเปิดใช้</small></div></div>`;
+  const W = 300, H = 110, mn = Math.min(...pts.map(p => p.v)), mx = Math.max(...pts.map(p => p.v)), span = mx - mn || 1, t0 = new Date(pts[0].d).getTime(), t1 = new Date(pts[pts.length - 1].d).getTime() || t0 + 1;
+  const X = p => (new Date(p.d).getTime() - t0) / ((t1 - t0) || 1) * W, Y = p => H - 8 - (p.v - mn) / span * (H - 20);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(p).toFixed(1)).join(' '), last = pts[pts.length - 1], first = pts[0], ch = last.v - first.v;
+  return `<div class="card rise"><h3>${title}</h3>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><b class="num" style="font-size:22px">${thb(last.v, 0)}</b><span class="${ch >= 0 ? 'pos' : 'neg'}" style="font-size:13px;font-weight:700">${sg(x => thb(x, 0), ch)} (${first.v ? sg(x => nf(x * 100, 1) + '%', ch / first.v) : ''})</span></div>
+    <svg class="snapsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="sg-${key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2d46" stop-opacity=".38"/><stop offset="1" stop-color="#ff2d46" stop-opacity="0"/></linearGradient></defs>
+      <path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#sg-${key})"/><path d="${line}" fill="none" stroke="#ff4d5e" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:4px 0 10px"><span>${dateTh(first.d)}</span><span>สูงสุด ${thb(mx, 0)} · ต่ำสุด ${thb(mn, 0)}</span><span>${dateTh(last.d)}</span></div>${chips}</div>`;
+}
+let snapBusy = false;
+async function saveSnap(force) {
+  if (!api || !api.upsert || D.needsSnap || snapBusy || isReb() || !(D.holdings.length || D.accounts.length)) return;
+  if (!force && Date.now() - (+store.get('snapat', '0')) < 20 * 6e4) return;
+  snapBusy = true;
+  try { const f = fin(), row = { snap_date: today(), portfolio_thb: Math.round(f.portThb), net_worth_thb: Math.round(f.net) };
+    await api.upsert('dime_snapshots', row, 'user_id,snap_date'); store.set('snapat', String(Date.now()));
+    const e = D.snaps.find(s => s.date === row.snap_date), v = { date: row.snap_date, port: row.portfolio_thb, net: row.net_worth_thb }; if (e) Object.assign(e, v); else D.snaps.push(v);
+  } catch {} snapBusy = false;
+}
+
+/* ---------- สรุปปันผล ---------- */
+function divSummaryHtml() {
+  if (!D.dividends.length) return '';
+  const byY = {}; D.dividends.forEach(v => { const y = +v.date.slice(0, 4); byY[y] = (byY[y] || 0) + v.netThb; });
+  const years = Object.keys(byY).map(Number).sort((a, b) => b - a); if (!years.includes(S.divY)) S.divY = years[0];
+  const m = Array(12).fill(0), sym = {}; D.dividends.filter(v => +v.date.slice(0, 4) === S.divY).forEach(v => { m[+v.date.slice(5, 7) - 1] += v.netThb; sym[v.symbol] = (sym[v.symbol] || 0) + v.netThb; });
+  const mx = Math.max(...m, 1), tot = byY[S.divY], top = Object.entries(sym).sort((a, b) => b[1] - a[1]).slice(0, 5), mths = new Set(m.map((v, i) => v > 0 ? i : -1).filter(i => i >= 0)).size;
+  return `<div class="card rise" style="margin-bottom:12px"><h3>สรุปปันผลสุทธิ <small>หลังหักภาษี</small></h3>
+    <div class="quick" style="margin:0 0 10px">${years.map(y => `<button class="fchip ${y === S.divY ? 'on' : ''}" data-divy="${y}">${y + 543}</button>`).join('')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><b class="num" style="font-size:26px">${thb(tot, 0)}</b><span style="color:var(--muted);font-size:12.5px">เฉลี่ย ${thb(tot / (mths || 1), 0)}/เดือนที่ได้</span></div>
+    <div class="mbars">${m.map((v, i) => `<div title="${TH_MONTHS[i]}"><i style="height:${v / mx * 100}%"></i><span>${i + 1}</span></div>`).join('')}</div>
+    ${top.map(([s, v]) => `<div class="sb"><span>${s}</span><div class="meter"><div class="fill" data-w="${v / tot * 100}" style="background:var(--red)"></div></div><b>${thb(v, 0)}</b></div>`).join('')}</div>`;
+}
+
+/* ---------- สำรองข้อมูล & ความปลอดภัย ---------- */
+function dl(name, text, type, bom) { const b = new Blob([(bom ? '﻿' : '') + text], { type }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+const csvEsc = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+const toCsv = (cols, rows) => [cols.map(c => c[0]).join(','), ...rows.map(r => cols.map(c => csvEsc(c[1](r))).join(','))].join('\n');
+const BK = {
+  trades: ['ซื้อขายหุ้น', () => toCsv([['date', r => r.date], ['symbol', r => r.symbol], ['action', r => r.action], ['shares', r => r.shares], ['price_usd', r => r.price], ['fees_usd', r => r.fees], ['fx', r => r.fx], ['note', r => r.note]], D.trades)],
+  dividends: ['ปันผล', () => toCsv([['date', r => r.date], ['symbol', r => r.symbol], ['gross_usd', r => r.grossUsd], ['tax_usd', r => r.taxUsd], ['net_usd', r => r.netUsd], ['fx', r => r.fx], ['net_thb', r => r.netThb], ['note', r => r.note]], D.dividends)],
+  cashflow: ['เงินเข้า/ออกพอร์ต', () => toCsv([['date', r => r.date], ['type', r => r.type], ['thb', r => r.thb], ['usd', r => r.usd], ['fx', r => r.fx], ['direction', r => r.direction], ['note', r => r.note]], D.cashflow)],
+  ot: ['OT', () => toCsv([['date', r => r.date], ['start', r => r.start], ['end', r => r.end], ['hours', r => otHours(r)], ['rate', r => r.rate], ['pay_thb', r => Math.round(otPay(r) * 100) / 100], ['note', r => r.note]], D.ot)],
+  pots: ['รายรับ-รายจ่าย', () => toCsv([['date', r => r.date], ['pot', r => r.pot], ['type', r => KL[r.kind]], ['amount_thb', r => r.amount], ['note', r => r.note]], D.pots.flatMap(p => p.moves.map(m => ({ ...m, pot: p.name }))).sort((a, b) => b.date.localeCompare(a.date)))]
+};
+function openBackup() {
+  const ah = store.get('autohide', '1') === '1';
+  openSheet(`<h2 class="sh-title">สำรองข้อมูล &amp; ความปลอดภัย</h2>
+    <div class="note">ข้อมูลทั้งหมดอยู่ใน Supabase ของคุณ ดาวน์โหลดเก็บไว้เองเป็นระยะเพื่อความปลอดภัย (ไฟล์ CSV เปิดใน Excel ได้ ภาษาไทยไม่เพี้ยน)</div>
+    <button class="btn" data-bk="json" style="width:100%;margin:12px 0">ดาวน์โหลดทั้งหมด (JSON)</button>
+    <div class="quick" style="margin-bottom:16px">${Object.entries(BK).map(([k, v]) => `<button class="fchip" data-bk="${k}">CSV · ${v[0]}</button>`).join('')}</div>
+    <h3 class="gh">ความปลอดภัย</h3>
+    <button class="row rip" data-autohide style="width:100%"><div class="dot c">${svg('shield')}</div><div class="r-main"><b style="font-size:14px">ซ่อนตัวเลขอัตโนมัติ</b><small>ซ่อนเป็น **** เมื่อสลับไปแอพอื่น/ปิดหน้าจอ</small></div><div class="r-side"><b class="${ah ? 'pos' : ''}">${ah ? 'เปิด' : 'ปิด'}</b></div></button>`);
+  $('#add').classList.remove('open');
+}
+function doBackup(k) {
+  const d = today();
+  if (k === 'json') return dl(`kfinance-backup-${d}.json`, JSON.stringify({ app: 'K FINANCE', exported_at: new Date().toISOString(), fx: D.fx, settings: D.settings, holdings: D.holdings, trades: D.trades, dividends: D.dividends, cashflow: D.cashflow,
+    accounts: D.accounts, debts: D.debts, ot: D.ot, pots: D.pots, snapshots: D.snaps }, null, 2), 'application/json');
+  if (BK[k]) dl(`kfinance-${k}-${d}.csv`, BK[k][1](), 'text/csv;charset=utf-8', true);
+  toast('ดาวน์โหลดแล้ว');
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden || store.get('autohide', '1') !== '1' || S.hide) return;
+  S.hide = true; store.set('hide', '1'); applyHide(); closeSheet(); const k = view.scrollTop; render('n'); view.scrollTop = k;
+});
+
+/* ---------- วันหยุดนักขัตฤกษ์ไทย (ใช้กับปฏิทิน OT) ---------- */
+const TH_HOL = { '2026-01-01': 'วันขึ้นปีใหม่', '2026-01-02': 'วันหยุดพิเศษ', '2026-03-03': 'วันมาฆบูชา', '2026-04-06': 'วันจักรี', '2026-04-13': 'สงกรานต์', '2026-04-14': 'สงกรานต์', '2026-04-15': 'สงกรานต์', '2026-05-01': 'วันแรงงาน',
+  '2026-05-04': 'วันฉัตรมงคล', '2026-05-09': 'วันพืชมงคล', '2026-05-31': 'วันวิสาขบูชา', '2026-06-01': 'ชดเชยวิสาขบูชา', '2026-06-03': 'วันเฉลิมฯ พระราชินี', '2026-07-28': 'วันเฉลิมฯ ร.10', '2026-07-29': 'วันอาสาฬหบูชา', '2026-07-30': 'วันเข้าพรรษา',
+  '2026-08-12': 'วันแม่แห่งชาติ', '2026-10-13': 'วันนวมินทรมหาราช', '2026-10-23': 'วันปิยมหาราช', '2026-12-05': 'วันพ่อแห่งชาติ', '2026-12-07': 'ชดเชยวันพ่อ', '2026-12-10': 'วันรัฐธรรมนูญ', '2026-12-31': 'วันสิ้นปี',
+  '2027-01-01': 'วันขึ้นปีใหม่', '2027-02-22': 'ชดเชยมาฆบูชา', '2027-04-06': 'วันจักรี', '2027-04-13': 'สงกรานต์', '2027-04-14': 'สงกรานต์', '2027-04-15': 'สงกรานต์', '2027-05-03': 'ชดเชยวันแรงงาน', '2027-05-04': 'วันฉัตรมงคล',
+  '2027-05-20': 'วันวิสาขบูชา', '2027-06-03': 'วันเฉลิมฯ พระราชินี', '2027-07-19': 'ชดเชยอาสาฬหบูชา', '2027-07-28': 'วันเฉลิมฯ ร.10', '2027-08-12': 'วันแม่แห่งชาติ', '2027-10-13': 'วันนวมินทรมหาราช', '2027-10-25': 'ชดเชยวันปิยมหาราช',
+  '2027-12-06': 'ชดเชยวันพ่อ', '2027-12-10': 'วันรัฐธรรมนูญ', '2027-12-31': 'วันสิ้นปี' };
 
 /* ---------- boot ---------- */
 applyHide(); render('n');
 window.hideSplash();
-fetchQuotes(false);
+fetchQuotes(false); saveSnap();
 return { reload: nd => { setData(nd); render('n'); } };
 };
 
@@ -1561,13 +1786,14 @@ return { reload: nd => { setData(nd); render('n'); } };
   async function load() {
     const q = (t, req = true) => sb.from(t).select('*').limit(5000).then(r => {
       if (r.error && !req && MISSING.includes(r.error.code)) return { data: [], error: null, missing: true };
+      if (!r.error && !r.data) r.data = [];
       return r;
     });
-    const [st, hd, tr, cf, dv, ac, mv, db, pm, ot] = await Promise.all([
+    const [st, hd, tr, cf, dv, ac, mv, db, pm, ot, pt, ptm, sn] = await Promise.all([
       q('dime_settings'), q('dime_holdings'), q('dime_trades'), q('dime_cashflow'), q('dime_dividends'),
-      q('dime_accounts', false), q('dime_account_moves', false), q('dime_debts', false), q('dime_debt_payments', false), q('dime_ot_logs', false)]);
-    for (const r of [st, hd, tr, cf, dv, ac, mv, db, pm, ot]) if (r.error) throw r.error;
-    const needsMigration = [ac, mv, db, pm].some(r => r.missing), needsOt = !!ot.missing;
+      q('dime_accounts', false), q('dime_account_moves', false), q('dime_debts', false), q('dime_debt_payments', false), q('dime_ot_logs', false), q('dime_pots', false), q('dime_pot_moves', false), q('dime_snapshots', false)]);
+    for (const r of [st, hd, tr, cf, dv, ac, mv, db, pm, ot, pt, ptm, sn]) if (r.error) throw r.error;
+    const needsMigration = [ac, mv, db, pm].some(r => r.missing), needsOt = !!ot.missing, needsPots = !!(pt.missing || ptm.missing), needsSnap = !!sn.missing;
     const set = st.data[0] || {};
     // ราคาล่าสุด = รายการล่าสุดตามวันที่แล้วตาม id (เหมือน XLOOKUP ใน Excel)
     const asc = [...tr.data].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id);
@@ -1599,8 +1825,14 @@ return { reload: nd => { setData(nd); render('n'); } };
       return { id: d.id, name: d.name, kind: d.kind, principal: n(d.principal_thb), rate: n(d.interest_rate), minPay: n(d.min_payment_thb),
         dueDay: d.due_day, startedOn: d.started_on, note: d.note || '', payments, paid, balance: Math.max(0, n(d.principal_thb) - paid) };
     });
+    const pots = pt.data.map(p => {
+      const moves = ptm.data.filter(m => m.pot_id === p.id).map(m => ({ id: m.id, date: m.move_date, amount: n(m.amount_thb), kind: m.kind, note: m.note || '' }))
+        .sort((x, y) => y.date.localeCompare(x.date) || y.id - x.id);
+      return { id: p.id, name: p.name, emoji: p.emoji || '💰', pct: n(p.split_pct), order: p.sort_order || 0, moves, balance: moves.reduce((s, m) => s + m.amount, 0) };
+    }).sort((a, b) => a.order - b.order || a.id - b.id);
+    const snaps = sn.data.map(x => ({ date: x.snap_date, port: n(x.portfolio_thb), net: n(x.net_worth_thb) })).sort((a, b) => a.date.localeCompare(b.date));
     return {
-      updated: new Date().toISOString().slice(0, 10), fx: n(set.fx) || 33, contributionThb: n(set.contribution_thb), needsMigration, needsOt,
+      updated: new Date().toISOString().slice(0, 10), fx: n(set.fx) || 33, contributionThb: n(set.contribution_thb), needsMigration, needsOt, needsPots, needsSnap, pots, snaps,
       settings: { salary: n(set.monthly_salary_thb), otDays: n(set.ot_days_per_month) || 30, otHrs: n(set.ot_hours_per_day) || 8, income: n(set.monthly_income_thb), expense: n(set.monthly_expense_thb), targetMonths: n(set.emergency_target_months) || 6 },
       holdings: hd.data.map(h => ({ id: h.id, symbol: h.symbol, target: n(h.target), shares: shares[h.symbol] || 0, price: price[h.symbol] || 0 })),
       ot: ot.data.map(o => ({ id: o.id, date: o.work_date, start: String(o.start_time).slice(0, 5), end: String(o.end_time).slice(0, 5), rate: n(o.rate), note: o.note || '' })),
@@ -1612,7 +1844,8 @@ return { reload: nd => { setData(nd); render('n'); } };
     async insert(table, row) { const { data, error } = await sb.from(table).insert(row).select().single(); if (error) throw error; return data; },
     async insertMany(table, rows) { const { error } = await sb.from(table).insert(rows); if (error) throw error; },
     async update(table, id, row) { const { data, error } = await sb.from(table).update(row).eq('id', id).select(); if (error) throw error; if (!data || !data.length) throw new Error('ไม่พบรายการ หรือไม่มีสิทธิ์แก้ไข'); },
-    async remove(table, id) { const { data, error } = await sb.from(table).delete().eq('id', id).select(); if (error) throw error; if (!data || !data.length) throw new Error('ไม่พบรายการ หรือไม่มีสิทธิ์ลบ'); },
+    async upsert(table, row, onConflict) { const { error } = await sb.from(table).upsert({ ...row, user_id: uid }, { onConflict }); if (error) throw error; },
+    async remove(table, id) { const { data, error } = await sb.from(table).delete().eq('id', id).select(); if (error) throw error; if (!data || !data.length) throw new Error('ไม่พบรายการ หรือไม่มีสิทธิ์ลบ'); return data; },
     async removeMany(table, ids) { if (!ids.length) return; const { error } = await sb.from(table).delete().in('id', ids); if (error) throw error; },
     async upsertSettings(row) { const { error } = await sb.from('dime_settings').upsert({ ...row, user_id: uid, updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); if (error) throw error; },
     async signOut() { await sb.auth.signOut(); location.reload(); }
